@@ -136,6 +136,46 @@
 
             </plugins>
         </pluginManagement>
+
+        <plugins>
+            <!-- Surefire: unit tests only — excludes Testcontainers-based tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                        <exclude>**/*RoutingTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- Failsafe: integration tests (mvn verify) — requires Docker -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*IntegrationTest.java</include>
+                        <include>**/*RoutingTest.java</include>
+                    </includes>
+                    <environmentVariables>
+                        <!-- Docker Desktop 4.67+ on macOS uses docker-cli.sock, not the standard docker.sock -->
+                        <DOCKER_HOST>unix://${user.home}/Library/Containers/com.docker.docker/Data/docker-cli.sock</DOCKER_HOST>
+                        <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>${user.home}/Library/Containers/com.docker.docker/Data/docker-cli.sock</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
+                        <RYUK_DISABLED>true</RYUK_DISABLED>
+                    </environmentVariables>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 
 </project>

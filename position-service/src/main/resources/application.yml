@@ -49,14 +49,12 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       auto-offset-reset: earliest
-      # Explicit offset commits only — we commit after the DB write succeeds
       enable-auto-commit: false
       properties:
-        # Trust only our own event packages
         spring.json.trusted.packages: "com.clearing.shared.events"
         max.poll.records: 500
     listener:
-      ack-mode: manual
+      ack-mode: manual_immediate
 
   security:
     oauth2:

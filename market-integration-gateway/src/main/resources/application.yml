@@ -1,6 +1,10 @@
 server:
   port: 8088
 
+services:
+  trade-service:
+    uri: ${TRADE_SERVICE_URI:http://localhost:8081}
+
 spring:
   application:
     name: market-integration-gateway

@@ -1,5 +1,6 @@
 package com.clearing.position.service;
 
+import com.clearing.position.kafka.PositionUpdatedPublisher;
 import com.clearing.position.kafka.TradeValidationPublisher;
 import com.clearing.position.model.Position;
 import com.clearing.position.repository.PositionRepository;
@@ -30,6 +31,9 @@ class PositionValidationServiceTest {
 
     @Mock
     private TradeValidationPublisher validationPublisher;
+
+    @Mock
+    private PositionUpdatedPublisher positionUpdatedPublisher;
 
     @InjectMocks
     private PositionValidationService positionValidationService;

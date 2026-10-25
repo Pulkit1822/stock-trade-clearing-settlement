@@ -54,3 +54,8 @@ failsafe-reports/
 # Temporary files
 tmp/
 temp/
+
+
+# Local dev runtime & process IDs
+.dev/
+*.pid

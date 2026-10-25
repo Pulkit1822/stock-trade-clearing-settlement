@@ -27,6 +27,16 @@ spring:
           predicates:
             - Path=/api/v1/positions/**
 
+        - id: clearing-service
+          uri: ${CLEARING_SERVICE_URI:http://localhost:8083}
+          predicates:
+            - Path=/api/v1/clearing/**
+
+        - id: market-integration-gateway
+          uri: ${MARKET_GATEWAY_URI:http://localhost:8088}
+          predicates:
+            - Path=/api/v1/market/**
+
         - id: reference-data-service
           uri: ${REFERENCE_DATA_SERVICE_URI:http://localhost:8085}
           predicates:
@@ -35,12 +45,12 @@ spring:
         - id: corporate-action-service
           uri: ${CORPORATE_ACTION_SERVICE_URI:http://localhost:8086}
           predicates:
-            - Path=/corporate-actions/**
+            - Path=/api/v1/corporate-actions/**
 
         - id: notification-service
           uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8084}
           predicates:
-            - Path=/notifications/**
+            - Path=/api/v1/notifications/**
 
   # Redis: used for rate limiting (reactive RedisRateLimiter)
   data:

@@ -1,8 +1,10 @@
 package com.clearing.position.service;
 
+import com.clearing.position.kafka.PositionUpdatedPublisher;
 import com.clearing.position.kafka.TradeValidationPublisher;
 import com.clearing.position.model.Position;
 import com.clearing.position.repository.PositionRepository;
+import com.clearing.shared.events.PositionUpdatedEvent;
 import com.clearing.shared.events.TradeSubmittedEvent;
 import com.clearing.shared.events.TradeValidatedEvent;
 import com.clearing.shared.events.TradeValidationStatus;
@@ -22,10 +24,14 @@ public class PositionValidationService {
 
     private final PositionRepository positionRepository;
     private final TradeValidationPublisher validationPublisher;
+    private final PositionUpdatedPublisher positionUpdatedPublisher;
 
-    public PositionValidationService(PositionRepository positionRepository, TradeValidationPublisher validationPublisher) {
+    public PositionValidationService(PositionRepository positionRepository,
+                                     TradeValidationPublisher validationPublisher,
+                                     PositionUpdatedPublisher positionUpdatedPublisher) {
         this.positionRepository = positionRepository;
         this.validationPublisher = validationPublisher;
+        this.positionUpdatedPublisher = positionUpdatedPublisher;
     }
 
     /**
@@ -83,10 +89,30 @@ public class PositionValidationService {
             positionRepository.save(buyerPos);
         }
 
-        log.info("Ledger updated. Trade [{}] SETTLED. [{} -> {} | Qty: {}]", 
+        log.info("Ledger updated. Trade [{}] SETTLED. [{} -> {} | Qty: {}]",
                  tradeEvent.tradeId(), sellerId, buyerId, quantity);
 
-        // 6. Emit success event
+        // 6. Publish PositionUpdatedEvent for each affected account side.
+        //    ClearingService consumes these to confirm buyer + seller and mark settlement SETTLED.
+        Instant now = Instant.now();
+        positionUpdatedPublisher.publishPositionUpdated(new PositionUpdatedEvent(
+                sellerId,
+                instrumentId,
+                quantity.negate().intValue(),          // negative = debit
+                sellerPos.getQuantity().intValue(),
+                tradeEvent.tradeId(),
+                now
+        ));
+        positionUpdatedPublisher.publishPositionUpdated(new PositionUpdatedEvent(
+                buyerId,
+                instrumentId,
+                quantity.intValue(),                   // positive = credit
+                buyerPos.getQuantity().intValue(),
+                tradeEvent.tradeId(),
+                now
+        ));
+
+        // 7. Emit trade-validated success event
         TradeValidatedEvent successEvent = new TradeValidatedEvent(
                 tradeEvent.tradeId(),
                 TradeValidationStatus.VALIDATED,
