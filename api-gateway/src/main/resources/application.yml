@@ -1,0 +1,75 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      # Routes are defined here — each entry routes a path prefix to a downstream service.
+      # URIs are overridden in Docker via environment variables.
+      routes:
+        - id: trade-service
+          uri: ${TRADE_SERVICE_URI:http://localhost:8081}
+          predicates:
+            - Path=/api/v1/trades/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+                key-resolver: "#{@principalNameKeyResolver}"
+            - AddRequestHeader=X-Correlation-ID, ${random.uuid}
+
+        - id: position-service
+          uri: ${POSITION_SERVICE_URI:http://localhost:8082}
+          predicates:
+            - Path=/api/v1/positions/**
+
+        - id: reference-data-service
+          uri: ${REFERENCE_DATA_SERVICE_URI:http://localhost:8085}
+          predicates:
+            - Path=/instruments/**, /participants/**
+
+        - id: corporate-action-service
+          uri: ${CORPORATE_ACTION_SERVICE_URI:http://localhost:8086}
+          predicates:
+            - Path=/corporate-actions/**
+
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8084}
+          predicates:
+            - Path=/notifications/**
+
+  # Redis: used for rate limiting (reactive RedisRateLimiter)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  # OAuth2: validates JWT tokens issued by Keycloak before routing requests
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/clearing}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    com.clearing: INFO
+    org.springframework.cloud.gateway: INFO
+    org.springframework: WARN

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.clearing</groupId>
+        <artifactId>post-trade-clearing-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>shared-libraries</artifactId>
+    <packaging>jar</packaging>
+    <name>Shared Libraries</name>
+    <description>
+        Shared event contracts, DTOs, and domain exceptions used across all
+        PostTradeClearingPlatform microservices. This is a library module —
+        it does not contain a runnable Spring Boot application.
+    </description>
+
+    <dependencies>
+
+        <!-- Jackson: JSON serialization for Kafka events -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- Jackson Java Time support: Instant, LocalDateTime -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <!-- Jakarta Validation API: @NotNull, @NotBlank on DTOs -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+            <!--
+                No spring-boot-maven-plugin here.
+                This module is a dependency library, not a runnable app.
+            -->
+        </plugins>
+    </build>
+
+</project>
