@@ -163,7 +163,7 @@ flowchart TD
 sequenceDiagram
     autonumber
 
-    actor Participant as "Trader / Broker"
+    actor Trader as "Trader / Broker"
     participant Gateway as "API Gateway (8080)"
     participant TradeSvc as "Trade Service (8081)"
     participant RefData as "Reference Data (8085)"
@@ -172,14 +172,14 @@ sequenceDiagram
     participant ClearSvc as "Clearing Service (8083)"
     participant NotifSvc as "Notification Service (8084)"
 
-    Participant->>Gateway: POST /trades with Bearer JWT
+    Trader->>Gateway: POST /trades with Bearer JWT
     Gateway->>TradeSvc: Forward authenticated request
     TradeSvc->>RefData: Validate instrument and participant status
     RefData-->>TradeSvc: Instrument active and accounts open
     TradeSvc->>TradeSvc: Persist SUBMITTED trade via outbox
     TradeSvc->>Kafka: Publish trade-submitted event
     TradeSvc-->>Gateway: HTTP 202 Accepted with tradeId
-    Gateway-->>Participant: HTTP 202 Accepted
+    Gateway-->>Trader: HTTP 202 Accepted
 
     Kafka->>PosSvc: Consume trade-submitted
     PosSvc->>PosSvc: Acquire lock and check seller position
@@ -187,7 +187,7 @@ sequenceDiagram
     alt Insufficient position
         PosSvc->>Kafka: Publish to trade-dead-letter
         Kafka->>NotifSvc: Consume trade-dead-letter
-        NotifSvc-->>Participant: Send trade rejection notification via webhook/WS
+        NotifSvc-->>Trader: Send trade rejection notification via webhook/WS
     else Sufficient position available
         PosSvc->>PosSvc: Reserve seller assets and buyer allocation
         PosSvc->>Kafka: Publish trade-validated event
@@ -200,7 +200,7 @@ sequenceDiagram
         TradeSvc->>TradeSvc: Update trade status to SETTLED
 
         Kafka->>NotifSvc: Consume settlement-completed event
-        NotifSvc-->>Participant: Send settlement confirmation via webhook/WS
+        NotifSvc-->>Trader: Send settlement confirmation via webhook/WS
     end
 ```
 
