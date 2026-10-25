@@ -1,6 +1,5 @@
 package com.clearing.clearing.service;
 
-import com.clearing.clearing.kafka.SettlementEventPublisher;
 import com.clearing.clearing.model.Settlement;
 import com.clearing.clearing.model.SettlementStatus;
 import com.clearing.clearing.repository.SettlementRepository;
@@ -8,6 +7,10 @@ import com.clearing.shared.events.PositionUpdatedEvent;
 import com.clearing.shared.events.SettlementCompletedEvent;
 import com.clearing.shared.events.TradeValidatedEvent;
 import com.clearing.shared.events.TradeValidationStatus;
+import com.clearing.clearing.outbox.OutboxRepository;
+import com.clearing.shared.outbox.OutboxEvent;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -24,12 +27,15 @@ public class ClearingService {
     private static final Logger log = LoggerFactory.getLogger(ClearingService.class);
 
     private final SettlementRepository settlementRepository;
-    private final SettlementEventPublisher settlementEventPublisher;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     public ClearingService(SettlementRepository settlementRepository,
-                           SettlementEventPublisher settlementEventPublisher) {
+                           OutboxRepository outboxRepository,
+                           ObjectMapper objectMapper) {
         this.settlementRepository = settlementRepository;
-        this.settlementEventPublisher = settlementEventPublisher;
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -57,8 +63,11 @@ public class ClearingService {
         }
 
         Settlement pending = new Settlement(UUID.randomUUID(), event.tradeId(), SettlementStatus.PENDING);
+        pending.setQuantity(event.quantity());
+        pending.setPrice(event.price());
         settlementRepository.save(pending);
-        log.info("Settlement created with status PENDING for tradeId [{}]", event.tradeId());
+        log.info("Settlement created with status PENDING for tradeId [{}] with quantity {} and price {}", 
+                 event.tradeId(), event.quantity(), event.price());
     }
 
     /**
@@ -82,7 +91,9 @@ public class ClearingService {
                 });
 
         if (settlement.getStatus() == SettlementStatus.SETTLED
-                || settlement.getStatus() == SettlementStatus.FAILED) {
+                || settlement.getStatus() == SettlementStatus.FAILED
+                || settlement.getStatus() == SettlementStatus.READY_FOR_NETTING
+                || settlement.getStatus() == SettlementStatus.NETTED) {
             log.warn("PositionUpdatedEvent received for already-finalized settlement [tradeId={}, status={}]. Skipping.",
                     event.tradeId(), settlement.getStatus());
             return;
@@ -111,20 +122,14 @@ public class ClearingService {
     }
 
     private void finalizeSettlement(Settlement settlement) {
-        settlement.setStatus(SettlementStatus.SETTLED);
-        settlement.setSettledAt(Instant.now());
+        settlement.setStatus(SettlementStatus.READY_FOR_NETTING);
+        // We don't set settledAt yet, because it hasn't actually settled (just ready for netting)
         settlementRepository.save(settlement);
 
-        log.info("Settlement FINALIZED for tradeId [{}]. Buyer [{}] Seller [{}]",
+        log.info("Settlement ready for netting for tradeId [{}]. Buyer [{}] Seller [{}]",
                 settlement.getTradeId(), settlement.getBuyerAccountId(), settlement.getSellerAccountId());
 
-        SettlementCompletedEvent completedEvent = new SettlementCompletedEvent(
-                settlement.getTradeId(),
-                settlement.getBuyerAccountId(),
-                settlement.getSellerAccountId(),
-                settlement.getSettledAt()
-        );
-        settlementEventPublisher.publishSettlementCompleted(completedEvent);
+        // We no longer publish SettlementCompletedEvent here because we use Multilateral Netting now.
     }
 
     @Transactional(readOnly = true)

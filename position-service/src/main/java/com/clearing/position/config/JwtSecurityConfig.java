@@ -14,11 +14,14 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 
+import org.springframework.context.annotation.Profile;
+
 /**
  * Configures Spring Security for position-service to validate inbound Bearer tokens.
  */
 @Configuration
 @EnableWebSecurity
+@Profile("!test")
 public class JwtSecurityConfig {
 
     @Value("${spring.security.oauth2.resourceserver.jwt.secret}")

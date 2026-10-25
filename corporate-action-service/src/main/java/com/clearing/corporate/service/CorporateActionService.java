@@ -77,4 +77,8 @@ public class CorporateActionService {
     public List<CorporateAction> findByStatus(CorporateActionStatus status) {
         return corporateActionRepository.findByStatus(status);
     }
+
+    public List<CorporateAction> findAll() {
+        return corporateActionRepository.findAll();
+    }
 }

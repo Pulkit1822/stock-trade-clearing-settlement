@@ -32,6 +32,12 @@ public record TradeValidatedEvent(
         String rejectionReason,
 
         /** UTC timestamp when validation completed. */
-        Instant timestamp
+        Instant timestamp,
+
+        /** Number of shares in the trade (only populated if VALIDATED). */
+        Integer quantity,
+
+        /** Price per share (only populated if VALIDATED). */
+        java.math.BigDecimal price
 ) {
 }

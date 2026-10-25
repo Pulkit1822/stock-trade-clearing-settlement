@@ -2,10 +2,13 @@ package com.clearing.trade.service;
 
 import com.clearing.shared.dto.TradeRequest;
 import com.clearing.shared.events.TradeSubmittedEvent;
-import com.clearing.trade.kafka.TradeEventPublisher;
+import com.clearing.shared.outbox.OutboxEvent;
 import com.clearing.trade.model.Trade;
 import com.clearing.trade.model.TradeStatus;
 import com.clearing.trade.repository.TradeRepository;
+import com.clearing.trade.outbox.OutboxRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,17 +24,20 @@ public class TradeProcessingService {
     private static final Logger log = LoggerFactory.getLogger(TradeProcessingService.class);
 
     private final TradeRepository tradeRepository;
-    private final TradeEventPublisher tradeEventPublisher;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
-    public TradeProcessingService(TradeRepository tradeRepository, TradeEventPublisher tradeEventPublisher) {
+    public TradeProcessingService(TradeRepository tradeRepository, 
+                                  OutboxRepository outboxRepository,
+                                  ObjectMapper objectMapper) {
         this.tradeRepository = tradeRepository;
-        this.tradeEventPublisher = tradeEventPublisher;
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
      * Processes an incoming trade request.
-     * Enforced by strict @Transactional boundary: If Kafka send fails (non-async exception)
-     * or DB write fails, the entire transaction rolls back cleanly.
+     * Uses Transactional Outbox pattern to ensure atomicity.
      * 
      * @param request The inbound TradeRequest payload containing matched execution details.
      * @return The persisted Trade entity.
@@ -42,12 +48,12 @@ public class TradeProcessingService {
                  request.instrumentId(), request.buyerAccountId(), request.sellerAccountId());
 
         // 1. Generate core identifying data
-        UUID generatedTradeId = UUID.randomUUID(); // A UUID string equivalent logic is needed
+        UUID generatedTradeId = UUID.randomUUID();
         Instant now = Instant.now();
         BigDecimal quantityDecimal = new BigDecimal(request.quantity());
 
         Trade newTrade = new Trade(
-                UUID.randomUUID(), 
+                generatedTradeId, 
                 request.buyerAccountId(), 
                 request.sellerAccountId(), 
                 request.instrumentId(),
@@ -72,11 +78,21 @@ public class TradeProcessingService {
                 savedTrade.getTradeDate()
         );
 
-        // 4. Publish Event to Kafka.
-        // It's inside the transaction boundary to ensure atomicity via Kafka's integration (if 2PC is configured)
-        // Since we are using basic async Kafka template, the message is dispatched after or during commit.
-        tradeEventPublisher.publishTradeSubmitted(event);
-        log.info("Successfully handed TradeSubmittedEvent [{}] over to the event publisher.", event.tradeId());
+        // 4. Serialize and persist to Outbox
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            OutboxEvent outboxEvent = new OutboxEvent(
+                    "Trade", 
+                    savedTrade.getId().toString(), 
+                    "TradeSubmittedEvent", 
+                    payload
+            );
+            outboxRepository.save(outboxEvent);
+            log.info("Successfully saved TradeSubmittedEvent for Trade [{}] to Outbox table.", event.tradeId());
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize TradeSubmittedEvent: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to serialize TradeSubmittedEvent", e);
+        }
 
         return savedTrade;
     }

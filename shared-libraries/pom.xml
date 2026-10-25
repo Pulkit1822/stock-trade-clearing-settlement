@@ -40,6 +40,17 @@
             <artifactId>jakarta.validation-api</artifactId>
         </dependency>
 
+        <!-- Jakarta Persistence API for OutboxEvent entity -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+        </dependency>
+
+        <!-- Spring Kafka for DLQ and ErrorHandler config -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

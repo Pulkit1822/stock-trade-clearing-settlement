@@ -20,8 +20,12 @@ import java.nio.charset.StandardCharsets;
  * <p>Since we are using symmetric HS256 JWTs, we must provide a programmatic
  * {@link JwtDecoder} bean using the shared secret.
  */
+
+import org.springframework.context.annotation.Profile;
+
 @Configuration
 @EnableWebSecurity
+@Profile("!test")
 public class JwtSecurityConfig {
 
     @Value("${spring.security.oauth2.resourceserver.jwt.secret}")

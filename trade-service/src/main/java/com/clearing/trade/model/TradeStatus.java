@@ -5,5 +5,7 @@ public enum TradeStatus {
     VALIDATED,
     REJECTED,
     PROCESSED,
+    READY_FOR_NETTING,
+    NETTED,
     SETTLED
 }

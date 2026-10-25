@@ -1,10 +1,12 @@
 package com.clearing.position.service;
 
 import com.clearing.position.kafka.DividendPayoutPublisher;
+import com.clearing.position.kafka.StockSplitPublisher;
 import com.clearing.position.model.Position;
 import com.clearing.position.repository.PositionRepository;
 import com.clearing.shared.events.CorporateActionEvent;
 import com.clearing.shared.events.DividendPayoutEvent;
+import com.clearing.shared.events.StockSplitAppliedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -23,11 +25,14 @@ public class PositionCorporateActionService {
 
     private final PositionRepository positionRepository;
     private final DividendPayoutPublisher dividendPayoutPublisher;
+    private final StockSplitPublisher stockSplitPublisher;
 
     public PositionCorporateActionService(PositionRepository positionRepository,
-                                          DividendPayoutPublisher dividendPayoutPublisher) {
+                                          DividendPayoutPublisher dividendPayoutPublisher,
+                                          StockSplitPublisher stockSplitPublisher) {
         this.positionRepository = positionRepository;
         this.dividendPayoutPublisher = dividendPayoutPublisher;
+        this.stockSplitPublisher = stockSplitPublisher;
     }
 
     /**
@@ -47,7 +52,18 @@ public class PositionCorporateActionService {
             
             for (Position position : page.getContent()) {
                 BigDecimal oldQuantity = position.getQuantity();
-                position.setQuantity(oldQuantity.multiply(event.actionValue()));
+                BigDecimal newQuantity = oldQuantity.multiply(event.actionValue());
+                position.setQuantity(newQuantity);
+
+                StockSplitAppliedEvent splitEvent = new StockSplitAppliedEvent(
+                        event.corporateActionId(),
+                        position.getAccountId(),
+                        event.instrumentId(),
+                        oldQuantity,
+                        newQuantity,
+                        Instant.now()
+                );
+                stockSplitPublisher.publish(splitEvent);
             }
 
             positionRepository.saveAll(page.getContent());

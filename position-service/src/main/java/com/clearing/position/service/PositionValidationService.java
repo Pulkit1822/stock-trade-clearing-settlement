@@ -1,13 +1,15 @@
 package com.clearing.position.service;
 
-import com.clearing.position.kafka.PositionUpdatedPublisher;
-import com.clearing.position.kafka.TradeValidationPublisher;
 import com.clearing.position.model.Position;
 import com.clearing.position.repository.PositionRepository;
 import com.clearing.shared.events.PositionUpdatedEvent;
 import com.clearing.shared.events.TradeSubmittedEvent;
 import com.clearing.shared.events.TradeValidatedEvent;
 import com.clearing.shared.events.TradeValidationStatus;
+import com.clearing.position.outbox.OutboxRepository;
+import com.clearing.shared.outbox.OutboxEvent;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,15 +25,15 @@ public class PositionValidationService {
     private static final Logger log = LoggerFactory.getLogger(PositionValidationService.class);
 
     private final PositionRepository positionRepository;
-    private final TradeValidationPublisher validationPublisher;
-    private final PositionUpdatedPublisher positionUpdatedPublisher;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     public PositionValidationService(PositionRepository positionRepository,
-                                     TradeValidationPublisher validationPublisher,
-                                     PositionUpdatedPublisher positionUpdatedPublisher) {
+                                     OutboxRepository outboxRepository,
+                                     ObjectMapper objectMapper) {
         this.positionRepository = positionRepository;
-        this.validationPublisher = validationPublisher;
-        this.positionUpdatedPublisher = positionUpdatedPublisher;
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -73,9 +75,19 @@ public class PositionValidationService {
                     tradeEvent.tradeId(),
                     TradeValidationStatus.REJECTED,
                     "Insufficient position in Seller account",
-                    Instant.now()
+                    Instant.now(),
+                    null,
+                    null
             );
-            validationPublisher.publishValidationResult(rejectEvent);
+            try {
+                outboxRepository.save(new OutboxEvent(
+                        "TradeValidation", tradeEvent.tradeId(), "TradeValidatedEvent", objectMapper.writeValueAsString(rejectEvent)
+                ));
+                log.info("Successfully persisted rejection event to Outbox for Trade [{}]", tradeEvent.tradeId());
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize rejectEvent for Outbox: {}", e.getMessage(), e);
+                throw new RuntimeException("Failed to serialize rejectEvent", e);
+            }
             return;
         }
 
@@ -95,31 +107,46 @@ public class PositionValidationService {
         // 6. Publish PositionUpdatedEvent for each affected account side.
         //    ClearingService consumes these to confirm buyer + seller and mark settlement SETTLED.
         Instant now = Instant.now();
-        positionUpdatedPublisher.publishPositionUpdated(new PositionUpdatedEvent(
+        PositionUpdatedEvent sellerEvent = new PositionUpdatedEvent(
                 sellerId,
                 instrumentId,
                 quantity.negate().intValue(),          // negative = debit
                 sellerPos.getQuantity().intValue(),
                 tradeEvent.tradeId(),
                 now
-        ));
-        positionUpdatedPublisher.publishPositionUpdated(new PositionUpdatedEvent(
+        );
+        PositionUpdatedEvent buyerEvent = new PositionUpdatedEvent(
                 buyerId,
                 instrumentId,
                 quantity.intValue(),                   // positive = credit
                 buyerPos.getQuantity().intValue(),
                 tradeEvent.tradeId(),
                 now
-        ));
-
-        // 7. Emit trade-validated success event
+        );
         TradeValidatedEvent successEvent = new TradeValidatedEvent(
                 tradeEvent.tradeId(),
                 TradeValidationStatus.VALIDATED,
                 null,
-                Instant.now()
+                Instant.now(),
+                tradeEvent.quantity(),
+                tradeEvent.price()
         );
-        validationPublisher.publishValidationResult(successEvent);
+
+        try {
+            outboxRepository.save(new OutboxEvent(
+                    "Position", sellerId, "PositionUpdatedEvent", objectMapper.writeValueAsString(sellerEvent)
+            ));
+            outboxRepository.save(new OutboxEvent(
+                    "Position", buyerId, "PositionUpdatedEvent", objectMapper.writeValueAsString(buyerEvent)
+            ));
+            outboxRepository.save(new OutboxEvent(
+                    "TradeValidation", tradeEvent.tradeId(), "TradeValidatedEvent", objectMapper.writeValueAsString(successEvent)
+            ));
+            log.info("Successfully persisted outbox events for Trade [{}]", tradeEvent.tradeId());
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize events for Outbox: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to serialize events for Outbox", e);
+        }
     }
 
     private Position getOrCreatePosition(String accountId, String instrumentId) {

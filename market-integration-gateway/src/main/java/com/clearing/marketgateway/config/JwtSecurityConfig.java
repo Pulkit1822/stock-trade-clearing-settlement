@@ -24,8 +24,11 @@ import java.nio.charset.StandardCharsets;
  * <p>The same secret must be set in the API Gateway ({@code JWT_SECRET} env var)
  * so tokens issued there can be verified here without any network call.
  */
+import org.springframework.context.annotation.Profile;
+
 @Configuration
 @EnableWebSecurity
+@Profile("!test")
 public class JwtSecurityConfig {
 
     @Value("${spring.security.oauth2.resourceserver.jwt.secret}")

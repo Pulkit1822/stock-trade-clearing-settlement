@@ -9,6 +9,8 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import reactor.core.publisher.Mono;
 
+import java.util.Optional;
+
 @Configuration
 public class RateLimiterConfig {
 
@@ -28,7 +30,9 @@ public class RateLimiterConfig {
                     }
                     return auth.getName();
                 })
-                .defaultIfEmpty(exchange.getRequest().getRemoteAddress() != null ? 
-                        exchange.getRequest().getRemoteAddress().getAddress().getHostAddress() : "anonymous");
+                .defaultIfEmpty(
+                    Optional.ofNullable(exchange.getRequest().getRemoteAddress())
+                        .map(addr -> addr.getAddress().getHostAddress())
+                        .orElse("anonymous"));
     }
 }

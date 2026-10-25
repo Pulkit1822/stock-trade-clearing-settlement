@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, ArrowRightLeft, Layers, Bell, Send,
-  Activity, ChevronRight, LogOut
+  Activity, ChevronRight, LogOut, ShieldCheck, PlayCircle, Briefcase
 } from 'lucide-react';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -11,6 +11,9 @@ import TradeList from './pages/TradeList';
 import Positions from './pages/Positions';
 import Notifications from './pages/Notifications';
 import SubmitTrade from './pages/SubmitTrade';
+import Margin from './pages/Margin';
+import Netting from './pages/Netting';
+import CorporateActions from './pages/CorporateActions';
 import Login from './pages/Login';
 import './index.css';
 
@@ -19,6 +22,9 @@ const NAV_ITEMS = [
   { to: '/submit',      label: 'Submit Trade',   icon: <Send size={16} />             },
   { to: '/trades',      label: 'Trade History',  icon: <ArrowRightLeft size={16} />   },
   { to: '/positions',   label: 'Positions',      icon: <Layers size={16} />           },
+  { to: '/margin',      label: 'Margin & Risk',  icon: <ShieldCheck size={16} />      },
+  { to: '/netting',     label: 'Netting',        icon: <PlayCircle size={16} />       },
+  { to: '/corporate',   label: 'Corporate Actions', icon: <Briefcase size={16} />     },
   { to: '/notifications', label: 'Notifications', icon: <Bell size={16} />            },
 ];
 
@@ -30,7 +36,6 @@ const EXTERNAL_LINKS = [
 ];
 
 const Sidebar: React.FC = () => {
-  const location = useLocation(); // accessed via NavLink isActive below
   const { logout } = useAuth();
 
   return (
@@ -158,6 +163,9 @@ const AppShell: React.FC = () => (
           <Route path="/submit"        element={<SubmitTrade />} />
           <Route path="/trades"        element={<TradeList />} />
           <Route path="/positions"     element={<Positions />} />
+          <Route path="/margin"        element={<Margin />} />
+          <Route path="/netting"       element={<Netting />} />
+          <Route path="/corporate"     element={<CorporateActions />} />
           <Route path="/notifications" element={<Notifications />} />
         </Routes>
       </main>

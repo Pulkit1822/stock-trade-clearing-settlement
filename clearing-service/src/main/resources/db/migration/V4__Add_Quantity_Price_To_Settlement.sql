@@ -1,0 +1,2 @@
+ALTER TABLE settlements ADD COLUMN quantity BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE settlements ADD COLUMN price DECIMAL(18, 4);

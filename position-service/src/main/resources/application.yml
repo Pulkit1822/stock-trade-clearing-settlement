@@ -25,10 +25,14 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: position
 
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: position
+    create-schemas: true
+    default-schema: position
     baseline-on-migrate: true
     baseline-version: "0"
     validate-on-migrate: true

@@ -116,4 +116,60 @@ export interface Account {
 export const fetchAccounts = (): Promise<Account[]> =>
   api.get<Account[]>('/accounts').then((r) => r.data);
 
+// ── Margin API ───────────────────────────────────────────────────────────────
+
+export interface MarginCall {
+  id: string;
+  accountId: string;
+  deficitAmount: number;
+  status: 'OPEN' | 'RESOLVED';
+  createdAt: string;
+}
+
+export interface MarginStatus {
+  accountId: string;
+  totalCollateral: number;
+  requiredMargin: number;
+  openMarginCalls: MarginCall[];
+}
+
+export const fetchMarginStatus = (accountId: string): Promise<MarginStatus> =>
+  api.get<MarginStatus>(`/api/v1/margin/status/${accountId}`).then((r) => r.data);
+
+export const depositCollateral = (accountId: string, amount: number): Promise<void> =>
+  api.post(`/api/v1/margin/collateral/${accountId}/deposit?amount=${amount}`).then((r) => r.data);
+
+// ── Netting API ──────────────────────────────────────────────────────────────
+
+export const triggerNetting = (businessDate?: string): Promise<any> => {
+  const url = businessDate 
+    ? `/api/v1/netting/trigger?businessDate=${businessDate}`
+    : '/api/v1/netting/trigger';
+  return api.post(url).then((r) => r.data);
+};
+
+// ── Corporate Actions API ────────────────────────────────────────────────────
+
+export interface CorporateAction {
+  id: string;
+  corporateActionId: string;
+  instrumentId: string;
+  actionType: 'STOCK_SPLIT' | 'DIVIDEND';
+  actionValue: number;
+  status: 'PENDING' | 'PUBLISHED' | 'CANCELLED';
+  publishedAt: string | null;
+}
+
+export const fetchCorporateActions = (): Promise<CorporateAction[]> =>
+  api.get<CorporateAction[]>('/api/v1/corporate-actions').then((r) => r.data);
+
+export const submitCorporateAction = (
+  instrumentId: string,
+  actionType: 'STOCK_SPLIT' | 'DIVIDEND',
+  actionValue: number
+): Promise<CorporateAction> =>
+  api.post<CorporateAction>(
+    `/api/v1/corporate-actions?instrumentId=${instrumentId}&actionType=${actionType}&actionValue=${actionValue}`
+  ).then((r) => r.data);
+
 export default api;

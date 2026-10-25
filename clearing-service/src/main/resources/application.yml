@@ -25,10 +25,14 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: clearing
 
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: clearing
+    create-schemas: true
+    default-schema: clearing
     baseline-on-migrate: true
     baseline-version: 0
     validate-on-migrate: true

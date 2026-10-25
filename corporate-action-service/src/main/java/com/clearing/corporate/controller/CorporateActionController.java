@@ -67,12 +67,18 @@ public class CorporateActionController {
     }
 
     /**
-     * GET /api/v1/corporate-actions?status=PENDING
-     * Find corporate actions by status.
+     * GET /api/v1/corporate-actions
+     * Find corporate actions by status or get all if status is omitted.
      */
     @GetMapping
-    public ResponseEntity<List<CorporateAction>> getByStatus(@RequestParam CorporateActionStatus status) {
-        log.info("GET /api/v1/corporate-actions?status={}", status);
-        return ResponseEntity.ok(corporateActionService.findByStatus(status));
+    public ResponseEntity<List<CorporateAction>> getCorporateActions(
+            @RequestParam(required = false) CorporateActionStatus status) {
+        if (status != null) {
+            log.info("GET /api/v1/corporate-actions?status={}", status);
+            return ResponseEntity.ok(corporateActionService.findByStatus(status));
+        } else {
+            log.info("GET /api/v1/corporate-actions");
+            return ResponseEntity.ok(corporateActionService.findAll());
+        }
     }
 }

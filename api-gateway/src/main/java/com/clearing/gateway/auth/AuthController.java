@@ -42,7 +42,7 @@ public class AuthController {
         "ops",         "ops123"
     );
 
-    @Value("${spring.security.oauth2.resourceserver.jwt.secret}")
+    @Value("${clearing.jwt.secret}")
     private String jwtSecret;
 
     /**
@@ -53,6 +53,11 @@ public class AuthController {
     @PostMapping("/login")
     public Mono<ResponseEntity<Object>> login(@RequestBody LoginRequest loginRequest) {
         String username = loginRequest.username();
+        if (username == null || loginRequest.password() == null) {
+            return Mono.just(ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("error", "Invalid username or password")));
+        }
         String expectedPassword = KNOWN_USERS.get(username);
 
         if (expectedPassword == null || !expectedPassword.equals(loginRequest.password())) {
@@ -77,7 +82,7 @@ public class AuthController {
                 .claim("roles", "PARTICIPANT")
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(TOKEN_EXPIRY_HOURS, ChronoUnit.HOURS)))
-                .signWith(signingKey)
+                .signWith(signingKey, io.jsonwebtoken.Jwts.SIG.HS256)
                 .compact();
     }
 

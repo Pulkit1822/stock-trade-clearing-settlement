@@ -38,6 +38,12 @@ public class Settlement {
     @Column(name = "seller_confirmed", nullable = false)
     private boolean sellerConfirmed = false;
 
+    @Column(nullable = false)
+    private long quantity = 0;
+
+    @Column(precision = 18, scale = 4)
+    private java.math.BigDecimal price;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private SettlementStatus status;
@@ -83,6 +89,12 @@ public class Settlement {
 
     public boolean isSellerConfirmed() { return sellerConfirmed; }
     public void setSellerConfirmed(boolean sellerConfirmed) { this.sellerConfirmed = sellerConfirmed; }
+
+    public long getQuantity() { return quantity; }
+    public void setQuantity(long quantity) { this.quantity = quantity; }
+
+    public java.math.BigDecimal getPrice() { return price; }
+    public void setPrice(java.math.BigDecimal price) { this.price = price; }
 
     public SettlementStatus getStatus() { return status; }
     public void setStatus(SettlementStatus status) { this.status = status; }

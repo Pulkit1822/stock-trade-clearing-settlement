@@ -34,6 +34,7 @@
         <module>reference-data-service</module>
         <module>corporate-action-service</module>
         <module>notification-service</module>
+        <module>margin-service</module>
     </modules>
 
     <properties>
@@ -47,7 +48,7 @@
         <spring-cloud.version>2023.0.3</spring-cloud.version>
 
         <!-- Testing -->
-        <testcontainers.version>1.19.8</testcontainers.version>
+        <testcontainers.version>1.20.2</testcontainers.version>
 
         <!-- Flyway -->
         <flyway.version>10.15.0</flyway.version>
@@ -170,11 +171,12 @@
                         <include>**/*IntegrationTest.java</include>
                         <include>**/*RoutingTest.java</include>
                     </includes>
+                    <systemPropertyVariables>
+                        <api.version>1.41</api.version>
+                    </systemPropertyVariables>
                     <environmentVariables>
-                        <!-- Docker Desktop 4.67+ on macOS uses docker-cli.sock, not the standard docker.sock -->
-                        <DOCKER_HOST>unix://${user.home}/Library/Containers/com.docker.docker/Data/docker-cli.sock</DOCKER_HOST>
-                        <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>${user.home}/Library/Containers/com.docker.docker/Data/docker-cli.sock</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
-                        <RYUK_DISABLED>true</RYUK_DISABLED>
+                        <DOCKER_HOST>unix:///var/run/docker.sock</DOCKER_HOST>
+                        <TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>/var/run/docker.sock</TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE>
                     </environmentVariables>
                 </configuration>
                 <executions>

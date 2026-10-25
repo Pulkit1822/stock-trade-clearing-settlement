@@ -73,6 +73,13 @@ public class NotificationService {
                         event.amount().toPlainString(), event.instrumentId()));
     }
 
+    @Transactional
+    public void handleStockSplit(com.clearing.shared.events.StockSplitAppliedEvent event) {
+        notify(event.corporateActionId(), event.accountId(),
+                String.format("Stock split applied for %s. Your holdings changed from %s to %s.",
+                        event.instrumentId(), event.oldQuantity().toPlainString(), event.newQuantity().toPlainString()));
+    }
+
     public List<Notification> findByTradeId(String tradeId) {
         return notificationRepository.findByTradeId(tradeId);
     }

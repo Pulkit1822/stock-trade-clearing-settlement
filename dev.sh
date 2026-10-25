@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 # dev.sh — PostTradeClearingPlatform local environment manager
 #
 # ── Commands ───────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ DOCKER_COMPOSE_FILE="$ROOT/infrastructure/docker/docker-compose.yml"
 LOG_DIR="$ROOT/logs"
 PID_DIR="$ROOT/logs/pids"
 DB_PORT=5433
-DB_HOST="127.0.0.1"
+DB_HOST="localhost"
 
 # All Spring services in startup order (dependency-first)
 SERVICES=(
@@ -92,7 +92,7 @@ is_running() {
 
 wait_for_port() {
   local name=$1 port=$2 retries=${3:-60}
-  info "Waiting for $name on port $port…"
+  info "Waiting for ${name} on port ${port}…"
   for i in $(seq 1 $retries); do
     if nc -z localhost "$port" 2>/dev/null; then
       success "$name is up  (port $port)"
@@ -162,16 +162,18 @@ start_infra() {
   # the host port mapping is active. We wait for host reachability here.
   wait_for_port "Postgres (Host Port Binding)" 5433 15
 
-  # Reset Flyway schema history tables so migrations run cleanly on every start
-  info "Resetting Flyway schema history…"
+  # Reset Postgres schemas so migrations run cleanly on every start
+  info "Resetting Postgres schemas…"
   docker exec clearing-db psql -U admin -d clearing -q -c "
-    DROP TABLE IF EXISTS flyway_schema_history;
-    DROP TABLE IF EXISTS clearing_flyway_history;
-    DROP TABLE IF EXISTS notification_flyway_history;
-    DROP TABLE IF EXISTS corporate_action_flyway_history;
-    DROP TABLE IF EXISTS refdata_flyway_history;
-    DROP TABLE IF EXISTS position_flyway_history;
-  " && success "Flyway history cleared"
+    DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;
+    DROP SCHEMA IF EXISTS clearing CASCADE; CREATE SCHEMA clearing;
+    DROP SCHEMA IF EXISTS notification CASCADE; CREATE SCHEMA notification;
+    DROP SCHEMA IF EXISTS corporate_action CASCADE; CREATE SCHEMA corporate_action;
+    DROP SCHEMA IF EXISTS refdata CASCADE; CREATE SCHEMA refdata;
+    DROP SCHEMA IF EXISTS position CASCADE; CREATE SCHEMA position;
+    DROP SCHEMA IF EXISTS margin CASCADE; CREATE SCHEMA margin;
+    DROP SCHEMA IF EXISTS trade CASCADE; CREATE SCHEMA trade;
+  " && success "Postgres schemas cleared and recreated"
 
   # Wait for Kafka
   info "Waiting for Kafka topics to be created…"
@@ -184,6 +186,8 @@ start_infra() {
   sleep 5
 
   success "Infrastructure ready"
+  info "Waiting 10s for Postgres and Kafka to fully initialize..."
+  sleep 10
   start_infra_logs
 }
 
@@ -215,7 +219,7 @@ stop_infra() {
 }
 
 start_infra_logs() {
-  info "Tailing infrastructure logs to $LOG_DIR…"
+  info "Tailing infrastructure logs to ${LOG_DIR}…"
   mkdir -p "$PID_DIR"
   local containers
   containers=$(dc -f "$DOCKER_COMPOSE_FILE" ps --services 2>/dev/null || true)
@@ -230,9 +234,7 @@ start_infra_logs() {
     while true; do
       for log in "$LOG_DIR"/*.log; do
         [[ -f "$log" ]] || continue
-        # Cross-platform stat for bytes (macOS: -f%z, Linux: -c%s)
-        local size
-        size=$(stat -f%z "$log" 2>/dev/null || stat -c%s "$log" 2>/dev/null || echo 0)
+        size=$(wc -c < "$log" 2>/dev/null | tr -d ' ' || echo 0)
         if [[ "$size" -gt 3145728 ]]; then
           local ts
           ts=$(date +%Y%m%d_%H%M%S)
@@ -266,10 +268,11 @@ start_service() {
     return 0
   fi
 
-  info "Starting $name on port $port…"
+  info "Starting ${name} on port ${port}…"
   (
     cd "$ROOT/$name"
     DB_PORT=$DB_PORT \
+    DB_HOST=$DB_HOST \
     mvn spring-boot:run \
       -Dspring-boot.run.profiles=local \
       -Dspring-boot.run.jvmArguments="-Xms128m -Xmx512m" \
@@ -300,7 +303,7 @@ stop_services() {
     # Try PID file first
     if is_running "$name"; then
       local pid; pid=$(cat "$pid_f")
-      info "Stopping $name (pid $pid)…"
+      info "Stopping ${name} (pid ${pid})…"
       kill "$pid" 2>/dev/null || true
       local timeout=10
       while kill -0 "$pid" 2>/dev/null && [[ $timeout -gt 0 ]]; do
@@ -323,11 +326,11 @@ stop_services() {
 
 kill_by_port() {
   local port=$1
-  local pid; pid=$(lsof -ti :"$port" 2>/dev/null)
-  if [[ -n "$pid" ]]; then
-    info "Purging orphaned process on port $port (PID: $pid)…"
-    kill -9 "$pid" 2>/dev/null || true
-  fi
+  local pids; pids=$(lsof -ti :"$port" 2>/dev/null || true)
+  for p in $pids; do
+    info "Purging orphaned process on port ${port} (PID: ${p})…"
+    kill -9 "$p" 2>/dev/null || true
+  done
 }
 
 # ─── Status ────────────────────────────────────────────────────────────────────
