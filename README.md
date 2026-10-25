@@ -162,6 +162,7 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     autonumber
+
     actor Participant as "Trader / Broker"
     participant Gateway as "API Gateway (8080)"
     participant TradeSvc as "Trade Service (8081)"
@@ -171,31 +172,36 @@ sequenceDiagram
     participant ClearSvc as "Clearing Service (8083)"
     participant NotifSvc as "Notification Service (8084)"
 
-    Participant->>Gateway: POST /trades (Bearer JWT)
-    Gateway->>TradeSvc: Authenticated & Forwarded Request
-    TradeSvc->>RefData: Validate Instrument & Participant Status
-    RefData-->>TradeSvc: Validated (Instrument Active, Accounts Open)
-    TradeSvc->>TradeSvc: Persist Trade SUBMITTED via Outbox
-    TradeSvc->>Kafka: Publish to trade-submitted
-    TradeSvc-->>Gateway: HTTP 202 Accepted (tradeId, status: SUBMITTED)
+    Participant->>Gateway: POST /trades with Bearer JWT
+    Gateway->>TradeSvc: Forward authenticated request
+    TradeSvc->>RefData: Validate instrument and participant status
+    RefData-->>TradeSvc: Instrument active and accounts open
+    TradeSvc->>TradeSvc: Persist SUBMITTED trade via outbox
+    TradeSvc->>Kafka: Publish trade-submitted event
+    TradeSvc-->>Gateway: HTTP 202 Accepted with tradeId
     Gateway-->>Participant: HTTP 202 Accepted
 
-    Kafka->>PosSvc: Consume trade-submitted (Key: buyerAccount)
-    PosSvc->>PosSvc: Acquire Lock & Check Seller Position
-    alt Sufficient Position Available
-        PosSvc->>PosSvc: Reserve Seller Asset & Buyer Allocation
-        PosSvc->>Kafka: Publish trade-validated & position-updated
-    else Insufficient Position (Oversell)
+    Kafka->>PosSvc: Consume trade-submitted
+    PosSvc->>PosSvc: Acquire lock and check seller position
+
+    alt Insufficient position
         PosSvc->>Kafka: Publish to trade-dead-letter
+        Kafka->>NotifSvc: Consume trade-dead-letter
+        NotifSvc-->>Participant: Send trade rejection notification via webhook/WS
+    else Sufficient position available
+        PosSvc->>PosSvc: Reserve seller assets and buyer allocation
+        PosSvc->>Kafka: Publish trade-validated event
+
+        Kafka->>ClearSvc: Consume trade-validated event
+        ClearSvc->>ClearSvc: Execute Delivery-versus-Payment (DvP)
+        ClearSvc->>Kafka: Publish settlement-completed event
+
+        Kafka->>TradeSvc: Consume settlement-completed event
+        TradeSvc->>TradeSvc: Update trade status to SETTLED
+
+        Kafka->>NotifSvc: Consume settlement-completed event
+        NotifSvc-->>Participant: Send settlement confirmation via webhook/WS
     end
-
-    Kafka->>ClearSvc: Consume trade-validated & position-updated
-    ClearSvc->>ClearSvc: Execute Delivery-versus-Payment (DvP)
-    ClearSvc->>ClearSvc: Update Trade Status to SETTLED
-    ClearSvc->>Kafka: Publish settlement-completed
-
-    Kafka->>NotifSvc: Consume settlement-completed
-    NotifSvc->>Participant: Push Settlement Confirmation (Webhook / WebSocket)
 ```
 
 ---
