@@ -8,6 +8,7 @@ import com.clearing.notification.repository.NotificationRepository;
 import com.clearing.notification.repository.ProcessedEventRepository;
 import com.clearing.shared.events.NotificationEvent;
 import com.clearing.shared.events.SettlementCompletedEvent;
+import com.clearing.shared.events.MarginCallEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -103,6 +104,19 @@ public class NotificationService {
         notify(event.corporateActionId(), event.accountId(),
                 String.format("Stock split applied for %s. Your holdings changed from %s to %s.",
                         event.instrumentId(), event.oldQuantity().toPlainString(), event.newQuantity().toPlainString()));
+    }
+
+    @Transactional
+    public void handleMarginCall(MarginCallEvent event) {
+        String idempotencyKey = "MARGIN-CALL-" + event.marginCallId();
+        if (processedEventRepository.existsById(idempotencyKey)) {
+            log.warn("Duplicate MarginCallEvent received for marginCallId [{}]. Skipping (idempotent).", event.marginCallId());
+            return;
+        }
+        processedEventRepository.save(new ProcessedEvent(idempotencyKey, Instant.now()));
+        notify(event.marginCallId(), event.accountId(),
+                String.format("MARGIN CALL: Your account has a collateral deficit of $%s. Please deposit funds immediately to meet the required margin of $%s.",
+                        event.deficitAmount().toPlainString(), event.requiredMargin().toPlainString()));
     }
 
     public List<Notification> findByTradeId(String tradeId) {

@@ -80,3 +80,11 @@ scrape_configs:
       - targets: ['host.docker.internal:8088']
         labels:
           service: 'market-integration-gateway'
+
+  # ── Margin Service ─────────────────────────────────────────────────────────
+  - job_name: 'margin-service'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:8087']
+        labels:
+          service: 'margin-service'
