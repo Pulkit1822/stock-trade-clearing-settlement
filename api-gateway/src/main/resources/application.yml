@@ -24,36 +24,86 @@ spring:
           uri: ${POSITION_SERVICE_URI:http://localhost:8082}
           predicates:
             - Path=/api/v1/positions/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@principalNameKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: positionServiceCircuitBreaker
+                fallbackUri: forward:/fallback/position
 
         - id: clearing-service
           uri: ${CLEARING_SERVICE_URI:http://localhost:8083}
           predicates:
             - Path=/api/v1/clearing/**, /api/v1/netting/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@principalNameKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: clearingServiceCircuitBreaker
+                fallbackUri: forward:/fallback/clearing
 
         - id: market-integration-gateway
           uri: ${MARKET_GATEWAY_URI:http://localhost:8088}
           predicates:
             - Path=/api/v1/market/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: marketGatewayCircuitBreaker
+                fallbackUri: forward:/fallback/market
 
         - id: reference-data-service
           uri: ${REFERENCE_DATA_SERVICE_URI:http://localhost:8085}
           predicates:
             - Path=/instruments/**, /participants/**, /accounts/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: refDataServiceCircuitBreaker
+                fallbackUri: forward:/fallback/refdata
 
         - id: corporate-action-service
           uri: ${CORPORATE_ACTION_SERVICE_URI:http://localhost:8086}
           predicates:
             - Path=/api/v1/corporate-actions/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: corpActionServiceCircuitBreaker
+                fallbackUri: forward:/fallback/corporate-action
 
         - id: notification-service
           uri: ${NOTIFICATION_SERVICE_URI:http://localhost:8084}
           predicates:
             - Path=/api/v1/notifications/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: notificationServiceCircuitBreaker
+                fallbackUri: forward:/fallback/notification
 
         - id: margin-service
           uri: ${MARGIN_SERVICE_URI:http://localhost:8087}
           predicates:
             - Path=/api/v1/margin/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@principalNameKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: marginServiceCircuitBreaker
+                fallbackUri: forward:/fallback/margin
 
   # Redis: used for rate limiting (reactive RedisRateLimiter)
   data:

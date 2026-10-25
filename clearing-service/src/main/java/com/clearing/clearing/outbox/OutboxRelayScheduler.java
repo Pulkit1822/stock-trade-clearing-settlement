@@ -45,7 +45,7 @@ public class OutboxRelayScheduler {
             try {
                 if ("SettlementCompletedEvent".equals(event.getType())) {
                     SettlementCompletedEvent payload = objectMapper.readValue(event.getPayload(), SettlementCompletedEvent.class);
-                    settlementEventPublisher.publishSettlementCompleted(payload);
+                    settlementEventPublisher.publishSettlementCompleted(payload).get();
                 } else {
                     log.warn("Unknown event type in outbox: {}", event.getType());
                 }
@@ -54,7 +54,9 @@ public class OutboxRelayScheduler {
                 
             } catch (JsonProcessingException e) {
                 log.error("Failed to deserialize Outbox event {}: {}", event.getId(), e.getMessage());
-                outboxRepository.delete(event);
+            } catch (Exception e) {
+                log.error("Failed to publish Outbox event {} to Kafka: {}", event.getId(), e.getMessage());
+                throw new RuntimeException("Failed to publish Outbox event", e);
             }
         }
     }

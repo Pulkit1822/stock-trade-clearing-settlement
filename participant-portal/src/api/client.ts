@@ -25,6 +25,14 @@ api.interceptors.response.use(
       localStorage.removeItem('access_token');
       window.location.href = '/login';
     }
+    
+    // Extract exact backend message for UI display
+    if (error.response?.data?.message) {
+      error.message = error.response.data.message;
+    } else if (error.response?.data?.error) {
+      error.message = error.response.data.error;
+    }
+    
     return Promise.reject(error);
   }
 );

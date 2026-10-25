@@ -52,21 +52,24 @@ public class OutboxRelayScheduler {
             try {
                 if ("TradeSubmittedEvent".equals(event.getType())) {
                     TradeSubmittedEvent payload = objectMapper.readValue(event.getPayload(), TradeSubmittedEvent.class);
-                    // Using existing publisher which has whenComplete async logging
-                    tradeEventPublisher.publishTradeSubmitted(payload);
+                    // Synchronously wait for Kafka broker acknowledgment to guarantee no data loss
+                    tradeEventPublisher.publishTradeSubmitted(payload).get();
                 } else {
                     log.warn("Unknown event type in outbox: {}", event.getType());
                 }
                 
-                // Remove the event to mark as processed. If Kafka throws an immediate exception, 
-                // the transaction will roll back and we'll retry next tick.
+                // Remove the event to mark as processed ONLY AFTER successful publish
                 outboxRepository.delete(event);
                 
             } catch (JsonProcessingException e) {
                 log.error("Failed to deserialize Outbox event {}: {}", event.getId(), e.getMessage());
-                // We might want to mark as FAILED rather than keeping it blocking the queue.
-                // For now, we delete it to avoid poison pill blocking.
-                outboxRepository.delete(event);
+                // Skip deletion or mark as FAILED so it doesn't get lost
+                // For this implementation, we will log and ignore it in this pass.
+            } catch (Exception e) {
+                log.error("Failed to publish Outbox event {} to Kafka: {}", event.getId(), e.getMessage());
+                // Do NOT delete the event. Let the transaction roll back or continue to the next event.
+                // The event will be retried on the next scheduled poll.
+                throw new RuntimeException("Failed to publish Outbox event", e);
             }
         }
     }

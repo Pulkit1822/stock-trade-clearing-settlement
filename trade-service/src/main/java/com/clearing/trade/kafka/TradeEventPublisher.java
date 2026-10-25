@@ -31,7 +31,7 @@ public class TradeEventPublisher {
      * 
      * @param event The exact TradeSubmittedEvent record mapping representing the accepted trade.
      */
-    public void publishTradeSubmitted(TradeSubmittedEvent event) {
+    public CompletableFuture<SendResult<String, Object>> publishTradeSubmitted(TradeSubmittedEvent event) {
         String partitionKey = event.tradeId();
         
         log.info("Attempting to publish TradeSubmittedEvent [tradeId={}] to topic [{}]", 
@@ -54,5 +54,7 @@ public class TradeEventPublisher {
                 // we should fallback to an Outbox pattern (saving event locally to DB) or halt the transaction.
             }
         });
+        
+        return future;
     }
 }

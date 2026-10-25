@@ -26,10 +26,10 @@ public class TradeValidationPublisher {
      * 
      * @param event The immutable TradeValidatedEvent containing REJECTED or VALIDATED status.
      */
-    public void publishValidationResult(TradeValidatedEvent event) {
+    public CompletableFuture<SendResult<String, Object>> publishValidationResult(TradeValidatedEvent event) {
         String partitionKey = event.tradeId();
         
-        log.info("Publishing TradeValidatedEvent [tradeId={}, status={}] to topic [{}]", 
+        log.info("Attempting to publish TradeValidatedEvent [tradeId={}, status={}] to topic [{}]", 
                  partitionKey, event.status(), TOPIC_TRADE_VALIDATED);
                  
         CompletableFuture<SendResult<String, Object>> future = 
@@ -37,12 +37,16 @@ public class TradeValidationPublisher {
                 
         future.whenComplete((result, exception) -> {
             if (exception == null) {
-                log.info("Successfully published Validation Status [{}] for tradeId [{}] to partition [{}]",
-                         event.status(), partitionKey, result.getRecordMetadata().partition());
+                log.info("Successfully published TradeValidatedEvent [tradeId={}] to partition [{}] with offset [{}]",
+                         partitionKey, 
+                         result.getRecordMetadata().partition(), 
+                         result.getRecordMetadata().offset());
             } else {
-                log.error("CRITICAL ALARM: Failed to publish TradeValidatedEvent for tradeId [{}]. System state may be desynced.",
-                          partitionKey, exception);
+                log.error("CRITICAL FAILURE: Failed to publish TradeValidatedEvent [tradeId={}]. Reason: {}",
+                          partitionKey, exception.getMessage(), exception);
             }
         });
+        
+        return future;
     }
 }

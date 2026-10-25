@@ -25,23 +25,27 @@ public class SettlementEventPublisher {
      * Publishes the terminal settlement-completed event.
      * Partition key is tradeId for ordered delivery to NotificationService.
      */
-    public void publishSettlementCompleted(SettlementCompletedEvent event) {
+    public CompletableFuture<SendResult<String, Object>> publishSettlementCompleted(SettlementCompletedEvent event) {
         String partitionKey = event.tradeId();
-
-        log.info("Publishing SettlementCompletedEvent [tradeId={}] to topic [{}]",
-                partitionKey, TOPIC_SETTLEMENT_COMPLETED);
-
-        CompletableFuture<SendResult<String, Object>> future =
+        
+        log.info("Attempting to publish SettlementCompletedEvent [tradeId={}] to topic [{}]", 
+                 partitionKey, TOPIC_SETTLEMENT_COMPLETED);
+                 
+        CompletableFuture<SendResult<String, Object>> future = 
                 kafkaTemplate.send(TOPIC_SETTLEMENT_COMPLETED, partitionKey, event);
-
+                
         future.whenComplete((result, exception) -> {
             if (exception == null) {
-                log.info("Successfully published SettlementCompletedEvent [tradeId={}] to partition [{}]",
-                        partitionKey, result.getRecordMetadata().partition());
+                log.info("Successfully published SettlementCompletedEvent [tradeId={}] to partition [{}] with offset [{}]",
+                         partitionKey, 
+                         result.getRecordMetadata().partition(), 
+                         result.getRecordMetadata().offset());
             } else {
-                log.error("CRITICAL ALARM: Failed to publish SettlementCompletedEvent [tradeId={}]. NotificationService will not be triggered.",
-                        partitionKey, exception);
+                log.error("CRITICAL FAILURE: Failed to publish SettlementCompletedEvent [tradeId={}]. Reason: {}",
+                          partitionKey, exception.getMessage(), exception);
             }
         });
+        
+        return future;
     }
 }

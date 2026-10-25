@@ -66,6 +66,12 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
+        <!-- Resilience4j: Required for CircuitBreaker gateway filter -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+        </dependency>
+
 
         <!-- JJWT for creating and signing HS256 JSON Web Tokens in AuthController -->
         <dependency>

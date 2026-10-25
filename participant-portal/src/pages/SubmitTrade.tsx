@@ -164,13 +164,15 @@ const SubmitTrade: React.FC = () => {
                 className={`form-select${errors.instrumentId ? ' error' : ''}`}
                 value={formData.instrumentId}
                 onChange={handleChange('instrumentId')}
+                aria-invalid={!!errors.instrumentId}
+                aria-describedby={errors.instrumentId ? "instrument-error" : undefined}
               >
                 <option value="">— Select instrument —</option>
                 {DEMO_INSTRUMENTS.map((inst) => (
                   <option key={inst} value={inst}>{inst}</option>
                 ))}
               </select>
-              {errors.instrumentId && <span className="form-error">{errors.instrumentId}</span>}
+              {errors.instrumentId && <span id="instrument-error" className="form-error">{errors.instrumentId}</span>}
             </div>
 
             <div className="form-grid">
@@ -183,8 +185,10 @@ const SubmitTrade: React.FC = () => {
                   placeholder="e.g. ACC-001"
                   value={formData.buyerAccountId}
                   onChange={handleChange('buyerAccountId')}
+                  aria-invalid={!!errors.buyerAccountId}
+                  aria-describedby={errors.buyerAccountId ? "buyer-error" : undefined}
                 />
-                {errors.buyerAccountId && <span className="form-error">{errors.buyerAccountId}</span>}
+                {errors.buyerAccountId && <span id="buyer-error" className="form-error">{errors.buyerAccountId}</span>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="seller-input">Seller Account ID</label>
@@ -195,8 +199,10 @@ const SubmitTrade: React.FC = () => {
                   placeholder="e.g. ACC-002"
                   value={formData.sellerAccountId}
                   onChange={handleChange('sellerAccountId')}
+                  aria-invalid={!!errors.sellerAccountId}
+                  aria-describedby={errors.sellerAccountId ? "seller-error" : undefined}
                 />
-                {errors.sellerAccountId && <span className="form-error">{errors.sellerAccountId}</span>}
+                {errors.sellerAccountId && <span id="seller-error" className="form-error">{errors.sellerAccountId}</span>}
               </div>
             </div>
 
@@ -212,8 +218,10 @@ const SubmitTrade: React.FC = () => {
                   placeholder="100"
                   value={formData.quantity}
                   onChange={handleChange('quantity')}
+                  aria-invalid={!!errors.quantity}
+                  aria-describedby={errors.quantity ? "qty-error" : undefined}
                 />
-                {errors.quantity && <span className="form-error">{errors.quantity}</span>}
+                {errors.quantity && <span id="qty-error" className="form-error">{errors.quantity}</span>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="price-input">Price (USD)</label>
@@ -226,8 +234,10 @@ const SubmitTrade: React.FC = () => {
                   placeholder="150.00"
                   value={formData.price}
                   onChange={handleChange('price')}
+                  aria-invalid={!!errors.price}
+                  aria-describedby={errors.price ? "price-error" : undefined}
                 />
-                {errors.price && <span className="form-error">{errors.price}</span>}
+                {errors.price && <span id="price-error" className="form-error">{errors.price}</span>}
               </div>
             </div>
           </div>

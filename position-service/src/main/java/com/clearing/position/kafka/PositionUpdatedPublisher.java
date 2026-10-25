@@ -27,23 +27,28 @@ public class PositionUpdatedPublisher {
      *
      * @param event The position update for one side of the trade (buyer or seller).
      */
-    public void publishPositionUpdated(PositionUpdatedEvent event) {
-        String partitionKey = event.accountId();
-
-        log.info("Publishing PositionUpdatedEvent [tradeId={}, accountId={}, delta={}] to topic [{}]",
-                event.tradeId(), event.accountId(), event.quantityDelta(), TOPIC_POSITION_UPDATED);
-
-        CompletableFuture<SendResult<String, Object>> future =
+    public CompletableFuture<SendResult<String, Object>> publishPositionUpdated(PositionUpdatedEvent event) {
+        // Use composite partition key to guarantee ordering per account-instrument pair
+        String partitionKey = event.accountId() + "-" + event.instrumentId();
+        
+        log.info("Attempting to publish PositionUpdatedEvent [accountId={}, instrumentId={}] to topic [{}]", 
+                 event.accountId(), event.instrumentId(), TOPIC_POSITION_UPDATED);
+                 
+        CompletableFuture<SendResult<String, Object>> future = 
                 kafkaTemplate.send(TOPIC_POSITION_UPDATED, partitionKey, event);
-
+                
         future.whenComplete((result, exception) -> {
             if (exception == null) {
-                log.info("Published PositionUpdatedEvent for tradeId [{}] accountId [{}] to partition [{}]",
-                        event.tradeId(), event.accountId(), result.getRecordMetadata().partition());
+                log.info("Successfully published PositionUpdatedEvent [accountId={}] to partition [{}] offset [{}]",
+                         event.accountId(), 
+                         result.getRecordMetadata().partition(), 
+                         result.getRecordMetadata().offset());
             } else {
-                log.error("CRITICAL ALARM: Failed to publish PositionUpdatedEvent for tradeId [{}] accountId [{}].",
-                        event.tradeId(), event.accountId(), exception);
+                log.error("CRITICAL FAILURE: Failed to publish PositionUpdatedEvent [accountId={}]. Reason: {}",
+                          event.accountId(), exception.getMessage(), exception);
             }
         });
+        
+        return future;
     }
 }
