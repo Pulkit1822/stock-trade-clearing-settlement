@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 DOCKER_COMPOSE_FILE="$ROOT/infrastructure/docker/docker-compose.yml"
 LOG_DIR="$ROOT/.dev/logs"
 PID_DIR="$ROOT/.dev/pids"
-DB_PORT="${DB_PORT:-5432}"
+DB_PORT=5433
 
 SERVICES=(
   trade-service:8081

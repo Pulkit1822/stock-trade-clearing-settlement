@@ -1,194 +1,118 @@
-# 📋 Master Development Plan & Engineering Backlog
-## Post-Trade Clearing & Settlement Platform
+# 🗺️ Master Engineering Roadmap & Production Execution Plan
 
-> **Status Dashboard:** Phase 1 – 5 Completed (`v1.0.0-SNAPSHOT`) | Phase 6 Active  
-> **Author & Maintainer:** Pulkit Mathur ([@Pulkit1822](https://github.com/Pulkit1822))  
-> **Architecture Pattern:** Event-Driven Microservices (Hexagonal + CQRS + Transactional Outbox)
+> **Platform:** Institutional Stock Trade Clearing & DvP Settlement Engine  
+> **Author & Lead Architect:** Pulkit Mathur ([@Pulkit1822](https://github.com/Pulkit1822))  
+> **Status:** Phase 0–6 Complete (`PROD-READY`) | Phase 7 Active | Phase 8–9 Scheduled  
+> **Target Production Standard:** T+0 Real-Time Continuous Net Settlement (CNS) & Delivery versus Payment (DvP)  
 
 ---
 
-## 🎯 Executive Roadmap & Progress Summary
+## 1. Executive Roadmap & Timeline
 
 ```mermaid
 gantt
-    title Post-Trade Platform Implementation Roadmap
+    title Clearing & Settlement Platform Roadmap
     dateFormat  YYYY-MM-DD
-    section Core Infrastructure
-    Monorepo & Build Setup (Phase 0)       :done, p0, 2026-03-01, 2026-03-07
-    Docker Compose Infra & Keycloak (Phase 1):done, p1, 2026-03-08, 2026-03-15
-    section Event Pipeline
-    Trade & Position Services (Phase 2)    :done, p2, 2026-03-16, 2026-03-25
-    Clearing & Notification Services (Phase 3):done, p3, 2026-03-26, 2026-04-05
-    Reference Data & Corp Actions (Phase 4):done, p4, 2026-04-06, 2026-04-15
-    section Gateways & Hardening
-    Market Integration Gateway (Phase 5)   :done, p5, 2026-04-16, 2026-04-22
-    Resilience, E2E & Chaos Testing (Phase 6):active, p6, 2026-04-23, 2026-05-05
-    section Advanced Capabilities
-    Central Counterparty (CCP) Netting (Phase 7):p7, 2026-05-06, 2026-05-20
-    FIX Protocol 4.4 / 5.0 Adapter (Phase 8):p8, 2026-05-21, 2026-06-05
-    Participant Web Portal UI (Phase 9)    :p9, 2026-06-06, 2026-06-25
+    section Phase 0: Foundations
+    Shared Contracts & Event Schemas     :done,    p0_1, 2026-10-01, 2026-10-05
+    Infrastructure & Docker Compose      :done,    p0_2, 2026-10-05, 2026-10-08
+    section Phase 1: Ingestion
+    Trade Service & Flyway Schema        :done,    p1_1, 2026-10-08, 2026-10-12
+    Idempotent Kafka Publishing          :done,    p1_2, 2026-10-12, 2026-10-14
+    section Phase 2: Ledger
+    Alphabetical Pessimistic Locking     :done,    p2_1, 2026-10-14, 2026-10-18
+    Position Service Oversell Guard      :done,    p2_2, 2026-10-18, 2026-10-20
+    section Phase 3: DvP Clearing
+    Two-Phase Settlement Engine          :done,    p3_1, 2026-10-20, 2026-10-22
+    Pessimistic Dual-Leg Confirmation    :done,    p3_2, 2026-10-22, 2026-10-24
+    section Phase 4: Notifications
+    Notification Service & Event Fanout  :done,    p4_1, 2026-10-24, 2026-10-25
+    section Phase 5: Reference Data
+    Caffeine Cache & Golden Records      :done,    p5_1, 2026-10-25, 2026-10-25
+    Corporate Action Adjustments         :done,    p5_2, 2026-10-25, 2026-10-25
+    section Phase 6: Market Gateway
+    External FIX/JSON Protocol Gateway   :done,    p6_1, 2026-10-25, 2026-10-25
+    section Phase 7: Edge & Security
+    API Gateway & Redis Rate Limiting    :active,  p7_1, 2026-10-25, 2026-10-28
+    Keycloak JWT Security Matrix         :active,  p7_2, 2026-10-26, 2026-10-29
+    section Phase 8: Hardening & Testing
+    Multi-Service Testcontainers Suite   :         p8_1, 2026-10-29, 2026-11-03
+    Chaos & Deadlock Concurrency Tests   :         p8_2, 2026-11-03, 2026-11-07
+    section Phase 9: Telemetry & Cloud
+    Prometheus Alerting & Grafana Boards :         p9_1, 2026-11-07, 2026-11-10
+    CI/CD Pipeline & Kubernetes Helm     :         p9_2, 2026-11-10, 2026-11-15
 ```
 
 ---
 
-## 📊 Phase-by-Phase Implementation Status
+## 2. Phase-by-Phase Execution Status
 
-### ✅ Phase 0 — Monorepo Architecture & Build Foundation
-* **Objective:** Establish Maven multi-module structure, dependency governance, and standardized event contracts.
-* **Status:** `100% Completed`
+### Phase 0: Foundations & Domain Contracts `[COMPLETED]`
+- [x] **Shared Contracts**: Implemented immutable Java 21 records in `com.clearing.shared.events` (`TradeSubmittedEvent`, `TradeValidatedEvent`, `PositionUpdatedEvent`, `SettlementCompletedEvent`, `CorporateActionEvent`, `NotificationEvent`, `ReferenceDataEvent`).
+- [x] **Exception Hierarchy**: Unified domain exceptions (`DuplicateTradeException`, `InsufficientPositionException`, `AccountNotFoundException`).
+- [x] **Infrastructure Stack**: Docker Compose environment with PostgreSQL 16 (port `5433:5432`), Kafka + Zookeeper (`9092`), Redis (`6379`), Keycloak (`8180`), Prometheus (`9090`), Grafana (`3000`), and Elasticsearch/Kibana (`9200`/`5601`).
+- [x] **Topic Provisioning**: Automated topic generation script (`create-topics.sh`) with 3 partitions and replication factor 1.
 
-| Task ID | Component | Deliverable | Status |
-|:---:|:---|:---|:---:|
-| `0.1` | **Root POM** | Parent `pom.xml` with Java 21 LTS, Spring Boot 3.3.5, Spring Cloud 2023.0.3, Testcontainers BOM | `[x] Done` |
-| `0.2` | **Shared Libraries** | `shared-libraries` module with immutable domain event records (`TradeSubmittedEvent`, `TradeValidatedEvent`, `PositionUpdatedEvent`, `SettlementCompletedEvent`) | `[x] Done` |
-| `0.3` | **Domain DTOs & Enums** | Standardized `TradeRequest`, `TradeResponse`, `TradeValidationStatus`, `CorporateActionType` | `[x] Done` |
-| `0.4` | **Domain Exceptions** | Custom exceptions: `InsufficientPositionException`, `InstrumentNotFoundException`, `DuplicateTradeException` | `[x] Done` |
+### Phase 1: Trade Ingestion Service (`trade-service:8081`) `[COMPLETED]`
+- [x] **REST Controller**: Validated `POST /api/v1/trades` accepting `TradeRequest` DTOs.
+- [x] **Persistence Layer**: PostgreSQL `trades` table with Flyway migrations (`V1__init_trade_schema.sql`).
+- [x] **Transactional Event Publisher**: Idempotent Kafka publisher (`acks=all`) emitting `TradeSubmittedEvent` to `trade-submitted`.
+- [x] **Unit & Integration Tests**: `TradeControllerTest`, `TradeProcessingServiceTest`, and `TradeServiceIntegrationTest`.
 
----
+### Phase 2: Real-Time Position Ledger (`position-service:8082`) `[COMPLETED]`
+- [x] **Kafka Ingestion**: `TradeSubmittedConsumer` processing `trade-submitted` events.
+- [x] **Alphabetical Lock Ordering**: Global lexicographical `PESSIMISTIC_WRITE` locking protocol on `(account_id, instrument_id)` eliminating circular-wait deadlocks.
+- [x] **Oversell Guard**: Validation of seller inventory with instant dead-letter routing (`trade-dead-letter`) on balance deficit.
+- [x] **Atomic Ledger Updates**: Single ACID transaction debiting seller, crediting buyer, and publishing `PositionUpdatedEvent` + `TradeValidatedEvent`.
+- [x] **Unit & Integration Tests**: Concurrency tests verifying zero deadlocks under reversed bilateral trades.
 
-### ✅ Phase 1 — Infrastructure, Security & Observability Fabric
-* **Objective:** Deploy local orchestration for all persistent stores, Kafka brokers, IAM, and telemetry.
-* **Status:** `100% Completed`
+### Phase 3: Delivery-versus-Payment Clearing (`clearing-service:8083`) `[COMPLETED]`
+- [x] **Dual-Leg Confirmation Protocol**: Asynchronously correlates `TradeValidatedEvent` and dual `PositionUpdatedEvent`s (seller debit + buyer credit).
+- [x] **Pessimistic Row-Locking**: `findByTradeId` locked with `PESSIMISTIC_WRITE` to prevent race conditions during concurrent confirmation processing.
+- [x] **Settlement Finality**: Commits `SettlementStatus.SETTLED` and emits `SettlementCompletedEvent` to `settlement-completed`.
+- [x] **Controller Endpoints**: `GET /api/v1/clearing/{tradeId}` and `GET /api/v1/clearing?status=SETTLED`.
 
-| Task ID | Component | Deliverable | Status |
-|:---:|:---|:---|:---:|
-| `1.1` | **Docker Orchestration** | `docker-compose.yml` for PostgreSQL 16, Kafka + Zookeeper, Redis 7.2, Kafka UI, Prometheus, Grafana, ELK | `[x] Done` |
-| `1.2` | **Kafka Topic Provisioning** | Automated broker setup provisioning 8 partitioned topics (`trade-submitted`, `trade-validated`, `position-updated`, etc.) with `partitions=3` | `[x] Done` |
-| `1.3` | **Keycloak IAM Realm** | Preconfigured `clearing-platform` realm export with clients (`api-gateway`, `frontend-client`) and roles (`participant`, `operations`, `admin`) | `[x] Done` |
-| `1.4` | **Observability Plane** | Centralized Prometheus scrape configurations for Spring Actuator metrics and pre-provisioned Grafana dashboards | `[x] Done` |
-| `1.5` | **Environment Manager** | Local CLI runner `dev.sh` for starting, stopping, tailing logs, health checks, and running automated E2E tests | `[x] Done` |
+### Phase 4: Omnichannel Notification Hub (`notification-service:8084`) `[COMPLETED]`
+- [x] **Consumer Pipeline**: `SettlementCompletedConsumer` consuming terminal settlement events.
+- [x] **Message Generation**: Formulates customized transaction receipts for buyers and sellers.
+- [x] **Audit Trail Persistence**: Writes records to PostgreSQL `notifications` table (`status='SENT'`).
+- [x] **Event Emission**: Dispatches `NotificationEvent` to `notification-events` for monitoring aggregation.
 
----
+### Phase 5: Reference Data & Corporate Actions (`8085` & `8086`) `[COMPLETED]`
+- [x] **Reference Data Golden Record**: Manages `Instrument` and `Participant` directories with Flyway schemas.
+- [x] **Caffeine In-Memory Cache**: Configured high-throughput caching with distributed Kafka invalidation.
+- [x] **Corporate Action Engine**: Manages announcements and executions of `STOCK_SPLIT`, `DIVIDEND`, `BONUS_ISSUE`, and `RIGHTS_ISSUE`.
+- [x] **Adjustment Events**: Publishes `CorporateActionEvent` to `corporate-action-events` partitioned by `instrumentId`.
 
-### ✅ Phase 2 — Core Trade Ingestion & Position Engine
-* **Objective:** Deliver atomic trade persistence, deadlock-free position reservation, and oversell guard.
-* **Status:** `100% Completed`
+### Phase 6: Market Integration Gateway (`market-integration-gateway:8088`) `[COMPLETED]`
+- [x] **Inbound Controller**: `POST /api/v1/market/trades` receiving vendor execution reports (`ExternalTradeRequest`).
+- [x] **Protocol Translation**: `TradeTranslator` transforming external representations into canonical internal `TradeRequest` models.
+- [x] **Resilient Forwarding**: `TradeServiceClient` routing normalized trades to `trade-service:8081` with correlation token headers.
 
-| Task ID | Component | Deliverable | Status |
-|:---:|:---|:---|:---:|
-| `2.1` | **Trade Service Entity** | `Trade.java` JPA entity, `TradeStatus.java` state machine, Flyway `V1__initial_schema.sql` and `V2__rename_account_columns.sql` | `[x] Done` |
-| `2.2` | **Trade Ingestion API** | REST `TradeController.java` (`POST /api/v1/trades`, `GET /api/v1/trades/{id}`) with Bean Validation | `[x] Done` |
-| `2.3` | **Trade Kafka Publisher** | `TradeEventPublisher.java` producing `trade-submitted` events with `buyerAccountId` partition key | `[x] Done` |
-| `2.4` | **Position Service Book** | `Position.java` entity, `PositionRepository.java`, and account balance lookups | `[x] Done` |
-| `2.5` | **Deadlock-Free Locking** | `PositionValidationService.java` implementing alphabetical ID lock ordering to eliminate circular-wait deadlocks under high concurrency | `[x] Done` |
-| `2.6` | **Atomic Position Updates** | Real-time debiting of sellers, crediting of buyers, and emission of `position-updated` events | `[x] Done` |
-| `2.7` | **Oversell Protection** | Validation guard catching insufficient security balances and publishing rejection events | `[x] Done` |
+### Phase 7: Edge API Gateway & Security Matrix (`api-gateway:8080`) `[IN PROGRESS]`
+- [x] **Path Routing**: Unified routing across all 7 downstream microservices.
+- [x] **Global CORS**: Cross-origin headers enabled for browser-based dashboards.
+- [x] **Correlation Tracing**: Uniform `X-Correlation-ID` header generation and downstream propagation.
+- [ ] **Redis Rate Limiting**: Token-bucket rate limiter tuning (100 req/sec replenish, 200 burst).
+- [ ] **Keycloak RBAC Enforcement**: Role-based access constraints (`ROLE_TRADER`, `ROLE_CLEARING_MEMBER`, `ROLE_ADMIN`).
 
----
+### Phase 8: End-to-End Testcontainers & Hardening `[SCHEDULED]`
+- [ ] **Full Multi-Service Testcontainers Suite**: Bootstrapping real PostgreSQL, Kafka, and Redis instances in automated CI integration tests.
+- [ ] **High-Concurrency Chaos Simulation**: Running 10,000 parallel randomized bilateral trades to stress-test alphabetical lock acquisition and guarantee zero deadlock exceptions.
+- [ ] **Kafka Chaos Scenarios**: Injecting artificial broker latency and network partitions to validate transactional outbox replay and consumer deduplication.
 
-### ✅ Phase 3 — Clearing, Settlement & Notification Pipeline
-* **Objective:** Coordinate bilateral Delivery-versus-Payment (DvP) settlement and multi-channel advisories.
-* **Status:** `100% Completed`
-
-| Task ID | Component | Deliverable | Status |
-|:---:|:---|:---|:---:|
-| `3.1` | **Clearing Service Model** | `Settlement.java` entity with `SettlementStatus` (`PENDING`, `SETTLED`, `FAILED`) and Flyway schema | `[x] Done` |
-| `3.2` | **Clearing Kafka Consumer** | Double-event consumer verifying both `trade-validated` and `position-updated` before finalizing | `[x] Done` |
-| `3.3` | **DvP Settlement Engine** | `ClearingService.java` executing atomic settlement finalization and publishing `settlement-completed` | `[x] Done` |
-| `3.4` | **Clearing REST API** | `ClearingController.java` (`GET /api/v1/clearing/settlements/{tradeId}`) | `[x] Done` |
-| `3.5` | **Notification Service** | `Notification.java` audit store, consumer for `settlement-completed`, and simulated email/webhook dispatcher | `[x] Done` |
-| `3.6` | **Notification History API**| `NotificationController.java` (`GET /api/v1/notifications/trades/{tradeId}`) | `[x] Done` |
-
----
-
-### ✅ Phase 4 — Reference Data & Corporate Action Engines
-* **Objective:** Master catalog for active financial instruments and lifecycle corporate action processing.
-* **Status:** `100% Completed`
-
-| Task ID | Component | Deliverable | Status |
-|:---:|:---|:---|:---:|
-| `4.1` | **Reference Data Catalog**| `Instrument.java` (ISIN, ticker, asset class) & `Participant.java` with Flyway database migration | `[x] Done` |
-| `4.2` | **Redis Cache Layer** | Cache-aside lookup implementation caching active instruments with sub-millisecond latency | `[x] Done` |
-| `4.3` | **Reference Event Publisher**| `ReferenceDataEventPublisher.java` broadcasting catalog updates to `reference-data-events` | `[x] Done` |
-| `4.4` | **Corporate Action Engine** | `CorporateAction.java`, split/dividend calculator in `CorporateActionService.java` | `[x] Done` |
-| `4.5` | **Corporate Event Publisher**| Kafka publisher emitting `corporate-action-events` to trigger position adjustments | `[x] Done` |
+### Phase 9: Telemetry, Observability & Cloud Deployment `[SCHEDULED]`
+- [ ] **Prometheus Scrape Validation**: Scrape verification across all 8 microservice actuator endpoints (`/actuator/prometheus`).
+- [ ] **Grafana Dashboard Provisioning**: Curated operational dashboards for trade throughput, settlement latency (p50, p95, p99), DLQ counts, and active database connection pools.
+- [ ] **Kubernetes Helm Charts & CI/CD**: Containerized Docker multi-stage builds and Kubernetes manifest generation for AWS EKS / GCP GKE deployment.
 
 ---
 
-### ✅ Phase 5 — API Gateway & Market Integration Gateway
-* **Objective:** Protocol translation, token validation, edge rate limiting, and external trade intake.
-* **Status:** `100% Completed`
+## 3. Definition of Done (DoD) for Production Readiness
 
-| Task ID | Component | Deliverable | Status |
-|:---:|:---|:---|:---:|
-| `5.1` | **Spring Cloud Gateway** | Non-blocking reactive gateway on port `8080` routing `/api/v1/trades/**`, `/api/v1/positions/**`, `/api/v1/clearing/**` | `[x] Done` |
-| `5.2` | **OAuth2 / JWT Security** | Keycloak resource server filter validating token claims, expiration, and user roles | `[x] Done` |
-| `5.3` | **Rate Limiting** | Redis-backed token bucket rate limiter protecting downstream microservices from traffic bursts | `[x] Done` |
-| `5.4` | **Market Gateway Translator** | Protocol normalization engine in `market-integration-gateway:8088` mapping external trade inputs into canonical `TradeRequest` DTOs | `[x] Done` |
-
----
-
-### 🔄 Phase 6 — Resilience, E2E Testing & Failure Recovery
-* **Objective:** Comprehensive testing, Testcontainers suites, Dead Letter Queue (DLQ) retry policies, and fail-safe automation.
-* **Status:** `In Progress` (Target: May 2026)
-
-| Task ID | Component | Focus Area | Status |
-|:---:|:---|:---|:---:|
-| `6.1` | **Testcontainers Integration** | Containerized integration tests across `trade-service` and `position-service` testing PostgreSQL & Kafka | `[x] Done` |
-| `6.2` | **Automated E2E Suite** | `dev.sh test` executing automated multi-step funding $\rightarrow$ trading $\rightarrow$ DvP settlement $\rightarrow$ notification assertions | `[x] Done` |
-| `6.3` | **DLQ Consumer & Replay** | Dedicated consumer listening on `trade-dead-letter` with dead-letter replay endpoint | `[ ] Planned` |
-| `6.4` | **Idempotency Outbox Engine**| Explicit outbox table with polling publisher to safeguard against edge-case Kafka broker drops | `[ ] In Progress` |
-| `6.5` | **Chaos Engineering** | Toxiproxy / chaos test scripts simulating network latency, dropped packets, and database disconnects | `[ ] Planned` |
-
----
-
-### ⏳ Phase 7 — Central Counterparty (CCP) Netting Engine
-* **Objective:** Batch multilateral netting algorithm compressing gross settlement volume into net bilateral cash and asset balances.
-* **Status:** `Scheduled`
-
-| Task ID | Component | Focus Area | Status |
-|:---:|:---|:---|:---:|
-| `7.1` | **Netting Batch Service** | Scheduled end-of-day job calculating net obligations per participant book | `[ ] Planned` |
-| `7.2` | **Novation Logic** | Central counterparty legal substitution (CCP becomes buyer to every seller, seller to every buyer) | `[ ] Planned` |
-| `7.3` | **Net Settlement Execution** | Transitioning high-frequency gross trades into single end-of-window DvP settlement instructions | `[ ] Planned` |
-
----
-
-### ⏳ Phase 8 — Institutional Protocols & SWIFT Integration
-* **Objective:** Direct matching engine interoperability via FIX and SWIFT ISO 20022 messaging.
-* **Status:** `Scheduled`
-
-| Task ID | Component | Focus Area | Status |
-|:---:|:---|:---|:---:|
-| `8.1` | **QuickFIX/J Gateway** | Ingestion of standard FIX 4.4 / 5.0 `ExecutionReport` (Tag 35=8) messages | `[ ] Planned` |
-| `8.2` | **ISO 20022 Adapter** | Outbound generation of `pacs.008` (credit transfer) and `camt.053` bank settlement advisories | `[ ] Planned` |
-| `8.3` | **Regulatory Audit Exporter**| Automated MiFID II / CAT regulatory trade feed generator | `[ ] Planned` |
-
----
-
-### ⏳ Phase 9 — Participant Web Portal (Frontend)
-* **Objective:** Responsive, real-time single-page application for broker-dealers and clearing operations.
-* **Status:** `Scheduled`
-
-| Task ID | Component | Focus Area | Status |
-|:---:|:---|:---|:---:|
-| `9.1` | **Trader Portal UI** | Real-time trade submission form, active order book status, and security balance monitor | `[ ] Planned` |
-| `9.2` | **Operations Dashboard** | Clearing house monitoring console displaying Kafka consumer lag, settlement queues, and DLQ alerts | `[ ] Planned` |
-| `9.3` | **WebSocket Feeds** | STOMP/WebSocket live stream pushing settlement notifications directly to the browser UI | `[ ] Planned` |
-
----
-
-## 🛡️ Definition of Done (DoD) & Engineering Quality Gates
-
-Every component merged into the platform must satisfy the following technical requirements:
-1. **Compilation & Packaging**: Clean build via `mvn clean package` with zero compiler warnings on Java 21.
-2. **Schema Safety**: All database modifications managed through incremental, idempotent Flyway migrations (`V{N}__{description}.sql`).
-3. **Partition Ordering**: All Kafka topics modifying state must specify an explicit business key (`accountId` or `instrumentId`) to enforce in-order stream processing.
-4. **Concurrency Safety**: Double-entry financial updates must enforce deterministic lock acquisition order to avoid RDBMS deadlocks.
-5. **Observability**: Every service must expose Actuator endpoints (`/actuator/health`, `/actuator/prometheus`) and inject `correlationId` and `tradeId` into MDC logs.
-6. **Zero Hardcoded Secrets**: All passwords, tokens, and broker URIs must be parameterized via environment variables with safe local defaults.
-
----
-
-## 🚀 Immediate Next Action Items
-
-1. **Verify Local Infrastructure**:
-   ```bash
-   ./dev.sh start
-   ```
-2. **Execute Full End-to-End Test**:
-   ```bash
-   ./dev.sh test
-   ```
-3. **Inspect Real-Time Message Streams**:
-   Open Kafka UI at `http://localhost:8091` to verify topic partitions and consumer group offsets.
+Every service and feature in this platform adheres to the following criteria before being designated `PROD-READY`:
+1. **Compilation & Clean Build**: `mvn clean test-compile` passes with zero compiler warnings across all 10 modules.
+2. **Schema Control**: Zero Hibernate auto-DDL (`ddl-auto: validate`). Every table modification is versioned in Flyway SQL migrations.
+3. **Deterministic Concurrency**: All concurrent database mutations must use ordered pessimistic locks or optimistic `@Version` checks; zero unhandled lock timeouts.
+4. **Kafka Contract Adherence**: Producers use idempotent configuration (`enable.idempotence=true`, `acks=all`). Consumers use manual immediate acknowledgments (`enable-auto-commit=false`).
+5. **Observability**: Exposes Micrometer Prometheus metrics, structured JSON logging, and uniform correlation ID headers.

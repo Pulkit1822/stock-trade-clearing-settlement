@@ -1,5 +1,7 @@
-# Local development profile — disables security so services run without Keycloak
+# Local development profile — connects to Docker Postgres (port 5433) and disables Keycloak auth for fast local iteration
 spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:clearing}
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration

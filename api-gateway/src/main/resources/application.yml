@@ -7,8 +7,22 @@ spring:
 
   cloud:
     gateway:
-      # Routes are defined here — each entry routes a path prefix to a downstream service.
-      # URIs are overridden in Docker via environment variables.
+      default-filters:
+        - AddRequestHeader=X-Correlation-ID, ${random.uuid}
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+
+      # Routes: Maps external inbound paths to internal microservices
       routes:
         - id: trade-service
           uri: ${TRADE_SERVICE_URI:http://localhost:8081}
@@ -20,7 +34,6 @@ spring:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
                 key-resolver: "#{@principalNameKeyResolver}"
-            - AddRequestHeader=X-Correlation-ID, ${random.uuid}
 
         - id: position-service
           uri: ${POSITION_SERVICE_URI:http://localhost:8082}
@@ -40,7 +53,9 @@ spring:
         - id: reference-data-service
           uri: ${REFERENCE_DATA_SERVICE_URI:http://localhost:8085}
           predicates:
-            - Path=/instruments/**, /participants/**
+            - Path=/instruments/**, /participants/**, /api/v1/instruments/**, /api/v1/participants/**
+          filters:
+            - RewritePath=/api/v1/(?<segment>instruments.*|participants.*), /$\{segment}
 
         - id: corporate-action-service
           uri: ${CORPORATE_ACTION_SERVICE_URI:http://localhost:8086}
@@ -52,7 +67,7 @@ spring:
           predicates:
             - Path=/api/v1/notifications/**
 
-  # Redis: used for rate limiting (reactive RedisRateLimiter)
+  # Redis: distributed token-bucket rate limiting
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -79,6 +94,8 @@ management:
         enabled: true
 
 logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [correlationId=%X{correlationId}] - %msg%n"
   level:
     com.clearing: INFO
     org.springframework.cloud.gateway: INFO
