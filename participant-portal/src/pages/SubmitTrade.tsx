@@ -4,6 +4,7 @@ import { Send, AlertCircle } from 'lucide-react';
 import { submitTrade } from '../api/client';
 import type { TradeRequest } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useSSE } from '../context/SSEContext';
 
 interface FormData {
   instrumentId: string;
@@ -26,6 +27,7 @@ const DEMO_INSTRUMENTS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META
 const SubmitTrade: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { lastEvent } = useSSE();
 
   const [formData, setFormData] = useState<FormData>({
     instrumentId: '',
@@ -38,6 +40,9 @@ const SubmitTrade: React.FC = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [submittedTrade, setSubmittedTrade] = useState<{ id: string } | null>(null);
+
+  // Optimistically check if the SSE stream reported this trade as settled
+  const isSettled = lastEvent?.tradeId === submittedTrade?.id && lastEvent?.message.includes('settled');
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
@@ -108,22 +113,26 @@ const SubmitTrade: React.FC = () => {
     return (
       <div>
         <div className="page-header">
-          <h1>Trade Submitted</h1>
+          <h1>{isSettled ? 'Trade Settled' : 'Trade Submitted'}</h1>
         </div>
         <div className="card" style={{ maxWidth: 540, textAlign: 'center', padding: '48px 32px' }}>
           <div style={{
             width: 64, height: 64,
             borderRadius: '50%',
-            background: 'rgba(16,185,129,0.12)',
+            background: isSettled ? 'rgba(59,130,246,0.12)' : 'rgba(16,185,129,0.12)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 20px',
+            transition: 'background 0.5s ease',
           }}>
-            <Send size={28} color="var(--success)" />
+            <Send size={28} color={isSettled ? "var(--brand-primary)" : "var(--success)"} />
           </div>
-          <h2 style={{ fontSize: '1.2rem', marginBottom: 8 }}>Trade Accepted</h2>
+          <h2 style={{ fontSize: '1.2rem', marginBottom: 8 }}>
+            {isSettled ? 'Clearing Complete' : 'Trade Accepted'}
+          </h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
-            Your trade has been submitted to the clearing pipeline.<br />
-            It will be settled once positions are validated.
+            {isSettled 
+              ? 'This trade has been successfully settled and positions have been updated.'
+              : <>Your trade has been submitted to the clearing pipeline.<br />It will be settled once positions are validated.</>}
           </p>
           <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', padding: '12px 16px', marginBottom: 24 }}>
             <span className="mono">{submittedTrade.id}</span>

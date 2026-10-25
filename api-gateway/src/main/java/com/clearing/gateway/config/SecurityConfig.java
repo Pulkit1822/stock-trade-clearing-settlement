@@ -9,6 +9,7 @@ import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.oauth2.server.resource.web.server.authentication.ServerBearerTokenAuthenticationConverter;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -28,6 +29,9 @@ public class SecurityConfig {
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+        ServerBearerTokenAuthenticationConverter bearerTokenConverter = new ServerBearerTokenAuthenticationConverter();
+        bearerTokenConverter.setAllowUriQueryParameter(true);
+
         http
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
             .cors(org.springframework.security.config.Customizer.withDefaults())
@@ -41,6 +45,7 @@ public class SecurityConfig {
             )
             // Validate all inbound Bearer tokens using our symmetric HS256 key
             .oauth2ResourceServer(oauth2 -> oauth2
+                .bearerTokenConverter(bearerTokenConverter)
                 .jwt(jwt -> jwt.jwtDecoder(reactiveJwtDecoder()))
             );
 

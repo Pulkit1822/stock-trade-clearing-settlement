@@ -15,6 +15,7 @@ import Margin from './pages/Margin';
 import Netting from './pages/Netting';
 import CorporateActions from './pages/CorporateActions';
 import Login from './pages/Login';
+import { SSEProvider } from './context/SSEContext';
 import './index.css';
 
 const NAV_ITEMS = [
@@ -177,10 +178,12 @@ const App: React.FC = () => (
   <BrowserRouter>
     <AuthProvider>
       <ToastProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<AppShell />} />
-        </Routes>
+        <SSEProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<AppShell />} />
+          </Routes>
+        </SSEProvider>
       </ToastProvider>
     </AuthProvider>
   </BrowserRouter>

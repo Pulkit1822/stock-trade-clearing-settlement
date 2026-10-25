@@ -40,6 +40,7 @@ public class NettingController {
                     "message", "EOD Netting completed successfully."
             ));
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.internalServerError().body(Map.of(
                     "status", "ERROR",
                     "businessDate", effectiveDate,

@@ -11,6 +11,7 @@ import com.clearing.shared.events.SettlementCompletedEvent;
 import com.clearing.shared.events.MarginCallEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,13 +27,22 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationEventPublisher notificationEventPublisher;
     private final ProcessedEventRepository processedEventRepository;
+    private final NotificationStreamService notificationStreamService;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     public NotificationService(NotificationRepository notificationRepository,
                                 NotificationEventPublisher notificationEventPublisher,
-                                ProcessedEventRepository processedEventRepository) {
+                                ProcessedEventRepository processedEventRepository,
+                                NotificationStreamService notificationStreamService,
+                                RedisTemplate<String, Object> redisTemplate,
+                                com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.notificationRepository = notificationRepository;
         this.notificationEventPublisher = notificationEventPublisher;
         this.processedEventRepository = processedEventRepository;
+        this.notificationStreamService = notificationStreamService;
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -62,7 +72,8 @@ public class NotificationService {
                         event.tradeId()));
     }
 
-    private void notify(String tradeId, String accountId, String message) {
+    @Transactional
+    public void notify(String tradeId, String accountId, String message) {
         Notification notification = new Notification(
                 UUID.randomUUID(), tradeId, accountId, message, NotificationStatus.PENDING);
 
@@ -74,6 +85,15 @@ public class NotificationService {
         notification.setStatus(NotificationStatus.SENT);
         notification.setSentAt(Instant.now());
         notificationRepository.save(notification);
+
+        // Push via Redis Pub/Sub
+        try {
+            String payload = objectMapper.writeValueAsString(notification);
+            redisTemplate.convertAndSend("notification-streams", payload);
+            log.info("Published notification to Redis Pub/Sub for account: {}", accountId);
+        } catch (Exception e) {
+            log.error("Failed to publish notification to Redis for account: {}", accountId, e);
+        }
 
         notificationEventPublisher.publish(new NotificationEvent(accountId, tradeId, message, Instant.now()));
     }

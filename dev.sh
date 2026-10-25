@@ -273,6 +273,8 @@ start_service() {
     cd "$ROOT/$name"
     DB_PORT=$DB_PORT \
     DB_HOST=$DB_HOST \
+    DB_USERNAME=admin \
+    DB_PASSWORD=admin \
     mvn spring-boot:run \
       -Dspring-boot.run.profiles=local \
       -Dspring-boot.run.jvmArguments="-Xms128m -Xmx512m" \
@@ -464,16 +466,36 @@ run_e2e_tests() {
   assert_eq "Initial trade status is SUBMITTED" "$trade_status" "SUBMITTED"
 
   # ── 3. Poll clearing settlement ────────────────────────────────────────────
-  echo "\n${BOLD}[3] Polling clearing-service for SETTLED status${RESET}"
+  echo "\n${BOLD}[3] Polling clearing-service for READY_FOR_NETTING status${RESET}"
   local settle_status=""
   for i in $(seq 1 25); do
     settle_status=$(curl -s "http://localhost:8083/api/v1/clearing/settlements/$trade_id" \
       -H "$AUTH_HDR" \
       2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
-    [[ "$settle_status" == "SETTLED" ]] && break
+    [[ "$settle_status" == "READY_FOR_NETTING" ]] && break
     sleep 2
   done
-  assert_eq "Clearing settlement status is SETTLED" "$settle_status" "SETTLED"
+  assert_eq "Clearing settlement status is READY_FOR_NETTING" "$settle_status" "READY_FOR_NETTING"
+
+  # ── 3.5. Trigger EOD Netting ───────────────────────────────────────────────
+  echo "\n${BOLD}[3.5] Triggering Multilateral EOD Netting${RESET}"
+  local netting_resp
+  netting_resp=$(curl -s -w "\n%{http_code}" -X POST \
+    "http://localhost:8083/api/v1/netting/trigger?businessDate=2026-06-25" \
+    -H "$AUTH_HDR")
+  local netting_http
+  netting_http=$(echo "$netting_resp" | tail -1)
+  assert_eq "Trigger Netting (HTTP 200)" "$netting_http" "200"
+
+  echo "\n${BOLD}[3.6] Polling clearing-service for NETTED status${RESET}"
+  for i in $(seq 1 10); do
+    settle_status=$(curl -s "http://localhost:8083/api/v1/clearing/settlements/$trade_id" \
+      -H "$AUTH_HDR" \
+      2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+    [[ "$settle_status" == "NETTED" ]] && break
+    sleep 2
+  done
+  assert_eq "Clearing settlement status is NETTED" "$settle_status" "NETTED"
 
   # ── 4. Poll trade-service for SETTLED status ───────────────────────────────
   echo "\n${BOLD}[4] Polling trade-service — trade status should flip to SETTLED${RESET}"

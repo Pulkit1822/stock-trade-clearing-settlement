@@ -53,10 +53,11 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       auto-offset-reset: earliest
       enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.clearing.shared.events"
     listener:
       ack-mode: manual_immediate
       properties:
-        spring.json.trusted.packages: "com.clearing.shared.events"
         max.poll.records: 100
 
   security:

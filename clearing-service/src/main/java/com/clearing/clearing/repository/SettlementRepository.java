@@ -15,14 +15,20 @@ import java.util.UUID;
 public interface SettlementRepository extends JpaRepository<Settlement, UUID> {
 
     /**
-     * Look up a settlement by its trade identifier.
+     * Look up a settlement by its trade identifier (Read-Only, no lock).
+     */
+    Optional<Settlement> findByTradeId(String tradeId);
+
+    /**
+     * Look up a settlement by its trade identifier with a pessimistic lock.
      *
      * PESSIMISTIC_WRITE lock (SELECT ... FOR UPDATE) prevents concurrent
      * position-updated events for the same trade from racing to update
      * buyer/seller confirmation flags simultaneously.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<Settlement> findByTradeId(String tradeId);
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM Settlement s WHERE s.tradeId = :tradeId")
+    Optional<Settlement> findLockedByTradeId(@org.springframework.data.repository.query.Param("tradeId") String tradeId);
 
     /**
      * Find all settlements in a given status — used to query PENDING

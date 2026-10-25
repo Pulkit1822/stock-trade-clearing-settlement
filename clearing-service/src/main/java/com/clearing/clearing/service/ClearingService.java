@@ -48,8 +48,29 @@ public class ClearingService {
      */
     @Transactional
     public void handleTradeValidated(TradeValidatedEvent event) {
-        if (settlementRepository.findByTradeId(event.tradeId()).isPresent()) {
-            log.warn("Duplicate TradeValidatedEvent received for tradeId [{}]. Skipping.", event.tradeId());
+        Settlement settlement = settlementRepository.findLockedByTradeId(event.tradeId())
+                .orElse(null);
+
+        if (settlement != null) {
+            // It might have been created by PositionUpdatedEvent out-of-order, or we are retrying.
+            // Ensure we set price and quantity in case they are missing.
+            if (event.status() == TradeValidationStatus.REJECTED) {
+                settlement.setStatus(SettlementStatus.FAILED);
+                settlement.setFailureReason(event.rejectionReason());
+            } else {
+                if (settlement.getQuantity() == 0 && settlement.getPrice() == null) {
+                    settlement.setQuantity(event.quantity());
+                    settlement.setPrice(event.price());
+                    log.info("Updated existing late-entry Settlement for tradeId [{}] with quantity {} and price {}",
+                            event.tradeId(), event.quantity(), event.price());
+                    if (settlement.isBuyerConfirmed() && settlement.isSellerConfirmed()) {
+                        finalizeSettlement(settlement);
+                    }
+                } else {
+                    log.warn("Duplicate TradeValidatedEvent received for tradeId [{}]. Skipping.", event.tradeId());
+                }
+            }
+            settlementRepository.save(settlement);
             return;
         }
 
@@ -84,7 +105,7 @@ public class ClearingService {
      */
     @Transactional
     public void handlePositionUpdated(PositionUpdatedEvent event) {
-        Settlement settlement = settlementRepository.findByTradeId(event.tradeId())
+        Settlement settlement = settlementRepository.findLockedByTradeId(event.tradeId())
                 .orElseGet(() -> {
                     log.warn("No settlement found for tradeId [{}] on PositionUpdatedEvent. Creating late entry.", event.tradeId());
                     return new Settlement(UUID.randomUUID(), event.tradeId(), SettlementStatus.PENDING);
@@ -114,11 +135,15 @@ public class ClearingService {
             log.info("Seller side confirmed for tradeId [{}], accountId [{}]", event.tradeId(), event.accountId());
         }
 
-        settlementRepository.save(settlement);
-
         if (settlement.isBuyerConfirmed() && settlement.isSellerConfirmed()) {
-            finalizeSettlement(settlement);
+            if (settlement.getPrice() != null) {
+                finalizeSettlement(settlement);
+            } else {
+                log.info("Both sides confirmed for tradeId [{}], but waiting for TradeValidatedEvent to provide price.", settlement.getTradeId());
+            }
         }
+        
+        settlementRepository.save(settlement);
     }
 
     private void finalizeSettlement(Settlement settlement) {

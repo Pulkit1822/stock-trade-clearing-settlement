@@ -14,6 +14,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import org.springframework.http.MediaType;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import com.clearing.notification.service.NotificationStreamService;
+
 @RestController
 @RequestMapping("/api/v1/notifications")
 public class NotificationController {
@@ -21,9 +25,22 @@ public class NotificationController {
     private static final Logger log = LoggerFactory.getLogger(NotificationController.class);
 
     private final NotificationService notificationService;
+    private final NotificationStreamService notificationStreamService;
 
-    public NotificationController(NotificationService notificationService) {
+    public NotificationController(NotificationService notificationService,
+                                  NotificationStreamService notificationStreamService) {
         this.notificationService = notificationService;
+        this.notificationStreamService = notificationStreamService;
+    }
+
+    /**
+     * GET /api/v1/notifications/stream/{accountId}
+     * Returns an SSE stream for real-time notifications.
+     */
+    @GetMapping(path = "/stream/{accountId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamNotifications(@PathVariable String accountId) {
+        log.info("SSE Stream requested for account: {}", accountId);
+        return notificationStreamService.createEmitter(accountId);
     }
 
     /**
