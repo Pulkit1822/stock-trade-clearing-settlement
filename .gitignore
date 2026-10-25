@@ -1,0 +1,56 @@
+# Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+.mvn/wrapper/maven-wrapper.jar
+mvnw
+mvnw.cmd
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Spring Boot
+*.log
+logs/
+
+# Docker
+.docker/
+
+# Secrets — never committed
+*.env
+.env.local
+.env.production
+secrets/
+
+# Keycloak realm export (contains sensitive config)
+# infrastructure/keycloak/realm-export.json
+
+# Test output
+surefire-reports/
+failsafe-reports/
+
+# Temporary files
+tmp/
+temp/

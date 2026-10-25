@@ -43,8 +43,9 @@ class PositionValidationServiceTest {
         Position sellerPos = new Position(UUID.randomUUID(), "SELLER1", "AAPL", new BigDecimal("500"));
         Position buyerPos = new Position(UUID.randomUUID(), "BUYER1", "AAPL", new BigDecimal("0"));
 
-        when(positionRepository.findByAccountIdAndInstrumentId("SELLER1", "AAPL")).thenReturn(Optional.of(sellerPos));
+        // Alphabetical order: BUYER1 is first, SELLER1 is second
         when(positionRepository.findByAccountIdAndInstrumentId("BUYER1", "AAPL")).thenReturn(Optional.of(buyerPos));
+        when(positionRepository.findByAccountIdAndInstrumentId("SELLER1", "AAPL")).thenReturn(Optional.of(sellerPos));
 
         // Act
         positionValidationService.validateAndProcessTrade(event);
@@ -71,6 +72,10 @@ class PositionValidationServiceTest {
 
         // Seller only has 50 shares
         Position sellerPos = new Position(UUID.randomUUID(), "SELLER1", "AAPL", new BigDecimal("50"));
+        Position buyerPos = new Position(UUID.randomUUID(), "BUYER1", "AAPL", new BigDecimal("0"));
+        
+        // Both must be stubbed as they are accessed for deterministic locking
+        when(positionRepository.findByAccountIdAndInstrumentId("BUYER1", "AAPL")).thenReturn(Optional.of(buyerPos));
         when(positionRepository.findByAccountIdAndInstrumentId("SELLER1", "AAPL")).thenReturn(Optional.of(sellerPos));
 
         // Act
@@ -84,5 +89,28 @@ class PositionValidationServiceTest {
         
         TradeValidatedEvent emittedEvent = captor.getValue();
         assertEquals(TradeValidationStatus.REJECTED, emittedEvent.status());
+    }
+
+    @Test
+    void shouldEnforceAlphabeticalLockOrderingToPreventDeadlocks() {
+        // Arrange: Participant names such that Seller (S) comes after Buyer (B)
+        // Deterministic ordering requires B be locked first.
+        String tradeId = UUID.randomUUID().toString();
+        TradeSubmittedEvent event = new TradeSubmittedEvent(tradeId, "ACCOUNT-B", "ACCOUNT-S", "AAPL", 100, new BigDecimal("150.00"), Instant.now());
+
+        Position posB = new Position(UUID.randomUUID(), "ACCOUNT-B", "AAPL", new BigDecimal("500"));
+        Position posS = new Position(UUID.randomUUID(), "ACCOUNT-S", "AAPL", new BigDecimal("500"));
+
+        // Setup generic mocks (order will be verified by InOrder)
+        when(positionRepository.findByAccountIdAndInstrumentId("ACCOUNT-B", "AAPL")).thenReturn(Optional.of(posB));
+        when(positionRepository.findByAccountIdAndInstrumentId("ACCOUNT-S", "AAPL")).thenReturn(Optional.of(posS));
+
+        // Act
+        positionValidationService.validateAndProcessTrade(event);
+
+        // Assert: Deterministic alphabetical order must be B then S (buyer then seller)
+        var inOrder = inOrder(positionRepository);
+        inOrder.verify(positionRepository).findByAccountIdAndInstrumentId("ACCOUNT-B", "AAPL");
+        inOrder.verify(positionRepository).findByAccountIdAndInstrumentId("ACCOUNT-S", "AAPL");
     }
 }

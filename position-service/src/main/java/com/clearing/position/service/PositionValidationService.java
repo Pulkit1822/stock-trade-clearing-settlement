@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -31,51 +30,63 @@ public class PositionValidationService {
 
     /**
      * Executes the strict validation check upon receiving a new trade explicitly.
-     * The @Transactional boundary combined with PESSIMISTIC_WRITE lock on the DB retrieval
-     * guarantees no two trades can deduct from the same seller's position concurrently.
+     * 
+     * CRITICAL STAFF ENGINEERING: 
+     * To prevent circular wait deadlocks, we enforce a deterministic alphabetical order
+     * for acquiring pessimistic locks. Regardless of the trade's semantic direction 
+     * (who is buyer/seller), the account with the smaller ID is ALWAYS locked first.
      */
     @Transactional
     public void validateAndProcessTrade(TradeSubmittedEvent tradeEvent) {
-        log.info("Validating funds and shares for Trade [{}]", tradeEvent.tradeId());
+        log.info("Processing Trade [{}] for Instrument [{}]. Lock ordering initialization...", 
+                 tradeEvent.tradeId(), tradeEvent.instrumentId());
 
-        BigDecimal requestedQuantity = new BigDecimal(tradeEvent.quantity());
+        final String buyerId = tradeEvent.buyerAccountId();
+        final String sellerId = tradeEvent.sellerAccountId();
+        final String instrumentId = tradeEvent.instrumentId();
+        final BigDecimal quantity = new BigDecimal(tradeEvent.quantity());
 
-        // 1. Lock and retrieve Seller's Position first
-        Optional<Position> sellerPositionOpt = positionRepository.findByAccountIdAndInstrumentId(
-                tradeEvent.sellerAccountId(), tradeEvent.instrumentId());
+        // 1. Determine locking order
+        final boolean isSelfTrade = buyerId.equals(sellerId);
+        final String firstId = buyerId.compareTo(sellerId) < 0 ? buyerId : sellerId;
+        final String secondId = firstId.equals(buyerId) ? sellerId : buyerId;
 
-        if (sellerPositionOpt.isEmpty()) {
-            rejectTrade(tradeEvent, "Seller has no open position for instrument " + tradeEvent.instrumentId());
+        Position firstPos = getOrCreatePosition(firstId, instrumentId);
+        Position secondPos = isSelfTrade ? firstPos : getOrCreatePosition(secondId, instrumentId);
+
+        // 3. Map semantic roles back to the locked entities
+        Position buyerPos = buyerId.equals(firstId) ? firstPos : secondPos;
+        Position sellerPos = sellerId.equals(firstId) ? firstPos : secondPos;
+
+        // 4. Validate Seller's sufficient quantity
+        if (sellerPos.getQuantity().compareTo(quantity) < 0) {
+            log.warn("Trade [{}] REJECTED: Insufficient position in Seller Account [{}]. Balance: {}, Required: {}", 
+                     tradeEvent.tradeId(), sellerId, sellerPos.getQuantity(), quantity);
+            
+            TradeValidatedEvent rejectEvent = new TradeValidatedEvent(
+                    tradeEvent.tradeId(),
+                    TradeValidationStatus.REJECTED,
+                    "Insufficient position in Seller account",
+                    Instant.now()
+            );
+            validationPublisher.publishValidationResult(rejectEvent);
             return;
         }
 
-        Position sellerPosition = sellerPositionOpt.get();
+        // 5. Atomic Debit & Credit
+        sellerPos.setQuantity(sellerPos.getQuantity().subtract(quantity));
+        buyerPos.setQuantity(buyerPos.getQuantity().add(quantity));
 
-        // 2. Validate sufficient quantity
-        if (sellerPosition.getQuantity().compareTo(requestedQuantity) < 0) {
-            rejectTrade(tradeEvent, "Insufficient position. Seller holds " + sellerPosition.getQuantity() + ", requested " + requestedQuantity);
-            return;
+        // Save (Persistence happens at TX commit, but we call save to trigger potential flush/validation)
+        positionRepository.save(sellerPos);
+        if (!isSelfTrade) {
+            positionRepository.save(buyerPos);
         }
 
-        // 3. Subtract from Seller
-        sellerPosition.setQuantity(sellerPosition.getQuantity().subtract(requestedQuantity));
-        positionRepository.save(sellerPosition);
+        log.info("Ledger updated. Trade [{}] SETTLED. [{} -> {} | Qty: {}]", 
+                 tradeEvent.tradeId(), sellerId, buyerId, quantity);
 
-        // 4. Lock and retrieve/create Buyer's Position
-        // Note: In high traffic, always lock accounts in a consistent order (e.g. alphabetical) to prevent deadlocks.
-        // For simplicity in this core PoC, we lock sequentially based on trade structure (seller then buyer).
-        Position buyerPosition = positionRepository.findByAccountIdAndInstrumentId(
-                tradeEvent.buyerAccountId(), tradeEvent.instrumentId())
-                .orElseGet(() -> new Position(UUID.randomUUID(), tradeEvent.buyerAccountId(), tradeEvent.instrumentId(), BigDecimal.ZERO));
-
-        // 5. Add to Buyer
-        buyerPosition.setQuantity(buyerPosition.getQuantity().add(requestedQuantity));
-        positionRepository.save(buyerPosition);
-
-        log.info("Ledger updated successfully for Trade [{}]. Seller deducted: {}, Buyer credited: {}", 
-                 tradeEvent.tradeId(), requestedQuantity, requestedQuantity);
-
-        // 6. Emit definitive VALIDATED network event
+        // 6. Emit success event
         TradeValidatedEvent successEvent = new TradeValidatedEvent(
                 tradeEvent.tradeId(),
                 TradeValidationStatus.VALIDATED,
@@ -85,14 +96,11 @@ public class PositionValidationService {
         validationPublisher.publishValidationResult(successEvent);
     }
 
-    private void rejectTrade(TradeSubmittedEvent tradeEvent, String reason) {
-        log.warn("Trade [{}] REJECTED: {}", tradeEvent.tradeId(), reason);
-        TradeValidatedEvent rejectEvent = new TradeValidatedEvent(
-                tradeEvent.tradeId(),
-                TradeValidationStatus.REJECTED,
-                reason,
-                Instant.now()
-        );
-        validationPublisher.publishValidationResult(rejectEvent);
+    private Position getOrCreatePosition(String accountId, String instrumentId) {
+        return positionRepository.findByAccountIdAndInstrumentId(accountId, instrumentId)
+                .orElseGet(() -> {
+                    log.debug("Initializing new position record for Account [{}] / Instrument [{}]", accountId, instrumentId);
+                    return new Position(UUID.randomUUID(), accountId, instrumentId, BigDecimal.ZERO);
+                });
     }
 }
