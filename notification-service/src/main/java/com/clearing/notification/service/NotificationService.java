@@ -3,7 +3,9 @@ package com.clearing.notification.service;
 import com.clearing.notification.kafka.NotificationEventPublisher;
 import com.clearing.notification.model.Notification;
 import com.clearing.notification.model.NotificationStatus;
+import com.clearing.notification.model.ProcessedEvent;
 import com.clearing.notification.repository.NotificationRepository;
+import com.clearing.notification.repository.ProcessedEventRepository;
 import com.clearing.shared.events.NotificationEvent;
 import com.clearing.shared.events.SettlementCompletedEvent;
 import org.slf4j.Logger;
@@ -22,11 +24,14 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationEventPublisher notificationEventPublisher;
+    private final ProcessedEventRepository processedEventRepository;
 
     public NotificationService(NotificationRepository notificationRepository,
-                                NotificationEventPublisher notificationEventPublisher) {
+                                NotificationEventPublisher notificationEventPublisher,
+                                ProcessedEventRepository processedEventRepository) {
         this.notificationRepository = notificationRepository;
         this.notificationEventPublisher = notificationEventPublisher;
+        this.processedEventRepository = processedEventRepository;
     }
 
     /**
@@ -41,6 +46,12 @@ public class NotificationService {
      */
     @Transactional
     public void handleSettlementCompleted(SettlementCompletedEvent event) {
+        String idempotencyKey = "SETTLEMENT-" + event.tradeId();
+        if (processedEventRepository.existsById(idempotencyKey)) {
+            log.warn("Duplicate SettlementCompletedEvent received for tradeId [{}]. Skipping (idempotent).", event.tradeId());
+            return;
+        }
+        processedEventRepository.save(new ProcessedEvent(idempotencyKey, Instant.now()));
         notify(event.tradeId(), event.buyerAccount(),
                 String.format("Your trade %s has been settled. Shares have been credited to your account.",
                         event.tradeId()));
@@ -68,6 +79,13 @@ public class NotificationService {
 
     @Transactional
     public void handleDividendPayout(com.clearing.shared.events.DividendPayoutEvent event) {
+        String idempotencyKey = "DIVIDEND-" + event.corporateActionId() + "-" + event.accountId();
+        if (processedEventRepository.existsById(idempotencyKey)) {
+            log.warn("Duplicate DividendPayoutEvent received for action [{}] account [{}]. Skipping (idempotent).", 
+                     event.corporateActionId(), event.accountId());
+            return;
+        }
+        processedEventRepository.save(new ProcessedEvent(idempotencyKey, Instant.now()));
         notify(event.corporateActionId(), event.accountId(),
                 String.format("Dividend payout of $%s credited for your holdings of %s.",
                         event.amount().toPlainString(), event.instrumentId()));
@@ -75,6 +93,13 @@ public class NotificationService {
 
     @Transactional
     public void handleStockSplit(com.clearing.shared.events.StockSplitAppliedEvent event) {
+        String idempotencyKey = "SPLIT-" + event.corporateActionId() + "-" + event.accountId();
+        if (processedEventRepository.existsById(idempotencyKey)) {
+            log.warn("Duplicate StockSplitAppliedEvent received for action [{}] account [{}]. Skipping (idempotent).", 
+                     event.corporateActionId(), event.accountId());
+            return;
+        }
+        processedEventRepository.save(new ProcessedEvent(idempotencyKey, Instant.now()));
         notify(event.corporateActionId(), event.accountId(),
                 String.format("Stock split applied for %s. Your holdings changed from %s to %s.",
                         event.instrumentId(), event.oldQuantity().toPlainString(), event.newQuantity().toPlainString()));

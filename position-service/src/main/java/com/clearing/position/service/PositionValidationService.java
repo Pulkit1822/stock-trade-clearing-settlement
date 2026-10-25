@@ -7,6 +7,8 @@ import com.clearing.shared.events.TradeSubmittedEvent;
 import com.clearing.shared.events.TradeValidatedEvent;
 import com.clearing.shared.events.TradeValidationStatus;
 import com.clearing.position.outbox.OutboxRepository;
+import com.clearing.position.model.ProcessedEvent;
+import com.clearing.position.repository.ProcessedEventRepository;
 import com.clearing.shared.outbox.OutboxEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,13 +28,16 @@ public class PositionValidationService {
 
     private final PositionRepository positionRepository;
     private final OutboxRepository outboxRepository;
+    private final ProcessedEventRepository processedEventRepository;
     private final ObjectMapper objectMapper;
 
     public PositionValidationService(PositionRepository positionRepository,
                                      OutboxRepository outboxRepository,
+                                     ProcessedEventRepository processedEventRepository,
                                      ObjectMapper objectMapper) {
         this.positionRepository = positionRepository;
         this.outboxRepository = outboxRepository;
+        this.processedEventRepository = processedEventRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -46,6 +51,12 @@ public class PositionValidationService {
      */
     @Transactional
     public void validateAndProcessTrade(TradeSubmittedEvent tradeEvent) {
+        if (processedEventRepository.existsById(tradeEvent.tradeId())) {
+            log.warn("Duplicate TradeSubmittedEvent received for tradeId [{}]. Skipping (idempotent).", tradeEvent.tradeId());
+            return;
+        }
+        processedEventRepository.save(new ProcessedEvent(tradeEvent.tradeId(), Instant.now()));
+
         log.info("Processing Trade [{}] for Instrument [{}]. Lock ordering initialization...", 
                  tradeEvent.tradeId(), tradeEvent.instrumentId());
 
