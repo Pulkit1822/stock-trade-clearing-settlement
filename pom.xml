@@ -106,6 +106,17 @@
             <scope>test</scope>
         </dependency>
 
+        <!--
+             Structured JSON logging: used by logback-spring.xml in every service.
+             Outputs log records as single-line JSON — required for Fluentd's JSON parser
+             to populate discrete Elasticsearch fields (level, message, tradeId, etc.)
+        -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
+
     </dependencies>
 
     <build>

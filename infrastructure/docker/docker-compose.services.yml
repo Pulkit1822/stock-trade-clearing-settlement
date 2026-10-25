@@ -1,0 +1,143 @@
+# infrastructure/docker/docker-compose.services.yml
+#
+# Optional Docker Compose override for running all Spring microservices in Docker.
+# This is separate from docker-compose.yml (infrastructure only) so that
+# developers can still run services with IntelliJ/VS Code + local JVM during development.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.services.yml up
+#
+# All services use SPRING_PROFILES_ACTIVE=docker to activate JSON logging
+# (logback-spring.xml docker profile → LogstashEncoder → Fluentd → Elasticsearch).
+
+version: '3.8'
+
+services:
+
+  trade-service:
+    image: clearing/trade-service:latest
+    container_name: trade-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: clearing
+      DB_USERNAME: admin
+      DB_PASSWORD: admin
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+    depends_on:
+      - postgres
+      - kafka
+      - fluentd
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async: "true"
+        tag: "clearing.trade-service"
+
+  position-service:
+    image: clearing/position-service:latest
+    container_name: position-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: clearing
+      DB_USERNAME: admin
+      DB_PASSWORD: admin
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+    depends_on:
+      - postgres
+      - kafka
+      - fluentd
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async: "true"
+        tag: "clearing.position-service"
+
+  clearing-service:
+    image: clearing/clearing-service:latest
+    container_name: clearing-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: clearing
+      DB_USERNAME: admin
+      DB_PASSWORD: admin
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+    depends_on:
+      - postgres
+      - kafka
+      - fluentd
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async: "true"
+        tag: "clearing.clearing-service"
+
+  notification-service:
+    image: clearing/notification-service:latest
+    container_name: notification-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: clearing
+      DB_USERNAME: admin
+      DB_PASSWORD: admin
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+    depends_on:
+      - postgres
+      - kafka
+      - fluentd
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async: "true"
+        tag: "clearing.notification-service"
+
+  reference-data-service:
+    image: clearing/reference-data-service:latest
+    container_name: reference-data-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: clearing
+      DB_USERNAME: admin
+      DB_PASSWORD: admin
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+    depends_on:
+      - postgres
+      - kafka
+      - redis
+      - fluentd
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        fluentd-async: "true"
+        tag: "clearing.reference-data-service"

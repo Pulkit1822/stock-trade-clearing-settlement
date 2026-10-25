@@ -1,0 +1,128 @@
+groups:
+
+  - name: clearing.jvm
+    interval: 30s
+    rules:
+
+      # ── JVM Heap Exhaustion Warning: < 10% free ──────────────────────────────
+      - alert: JvmHeapWarning
+        expr: >
+          (
+            jvm_memory_used_bytes{area="heap"}
+            /
+            jvm_memory_max_bytes{area="heap"}
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "JVM heap > 85% on {{ $labels.job }} ({{ $value | humanizePercentage }})"
+          description: >
+            Service {{ $labels.job }} (instance {{ $labels.instance }}) has heap usage at
+            {{ $value | humanizePercentage }} of max. GC pressure will increase significantly
+            above 85%. Check for memory leaks, large object allocations, or unclosed resources.
+          runbook: "https://wiki.internal/runbooks/jvm-heap"
+
+      # ── JVM Heap Critical: < 5% free, OOMKill imminent ───────────────────────
+      - alert: JvmHeapCritical
+        expr: >
+          (
+            jvm_memory_used_bytes{area="heap"}
+            /
+            jvm_memory_max_bytes{area="heap"}
+          ) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "JVM heap CRITICAL on {{ $labels.job }} ({{ $value | humanizePercentage }}) — OOM imminent"
+          description: >
+            Service {{ $labels.job }} heap usage is at {{ $value | humanizePercentage }} of max.
+            An OutOfMemoryError and JVM crash are imminent if heap is not freed.
+            Take a heap dump immediately: jmap -dump:format=b,file=heap.hprof <pid>
+          runbook: "https://wiki.internal/runbooks/jvm-oom"
+
+      # ── GC Thrashing: spending more than 10% of CPU time on GC ──────────────
+      - alert: JvmGcThrashing
+        expr: >
+          sum(rate(jvm_gc_pause_seconds_sum[5m])) by (job) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "JVM GC thrashing on {{ $labels.job }} ({{ $value | humanize }}s/s GC pause)"
+          description: >
+            Service {{ $labels.job }} is spending {{ $value | humanize }} seconds per second
+            in GC pauses — more than 10% of wall-clock time. This directly inflates p99 latency.
+            Common causes: heap too small, object churn rate too high, or G1GC region size mismatch.
+          runbook: "https://wiki.internal/runbooks/gc-thrashing"
+
+      # ── HikariCP Pool Exhaustion Warning ─────────────────────────────────────
+      # Pool max is 10 (configured in all application.yml files). Alert at 8.
+      - alert: HikariCpPoolHighUsage
+        expr: >
+          hikaricp_connections_active / hikaricp_connections_max > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "HikariCP pool > 80% on {{ $labels.job }} / pool {{ $labels.pool }}"
+          description: >
+            Service {{ $labels.job }} connection pool {{ $labels.pool }} is using
+            {{ $value | humanizePercentage }} of maximum connections.
+            Sustained high usage causes connection acquisition timeouts (30s default),
+            which will manifest as HTTP 500s and Kafka consumer commit failures.
+          runbook: "https://wiki.internal/runbooks/hikaricp-exhaustion"
+
+      # ── HikariCP Pool Exhaustion Critical ────────────────────────────────────
+      - alert: HikariCpPoolExhausted
+        expr: >
+          hikaricp_connections_pending > 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "HikariCP pool EXHAUSTED on {{ $labels.job }} — {{ $value }} threads waiting"
+          description: >
+            Service {{ $labels.job }} has {{ $value }} threads waiting for a DB connection.
+            The connection pool is fully exhausted. New requests will fail with connection
+            timeout errors after 30 seconds. Immediate action: increase maximum-pool-size
+            or identify and kill long-running transactions holding connections.
+          runbook: "https://wiki.internal/runbooks/hikaricp-exhausted"
+
+      # ── Thread Deadlock: JVM reports a thread deadlock ───────────────────────
+      - alert: JvmThreadDeadlock
+        expr: >
+          jvm_threads_deadlocked > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "JVM thread deadlock detected on {{ $labels.job }} ({{ $value }} threads stuck)"
+          description: >
+            Service {{ $labels.job }} has {{ $value }} threads in a deadlock state.
+            The service may become unresponsive. Take a thread dump:
+            jstack <pid> or kill -3 <pid> to diagnose the deadlock chain.
+            Position-service is particularly at risk; verify alphabetical lock ordering
+            on account identifiers in PositionValidationService.
+          runbook: "https://wiki.internal/runbooks/thread-deadlock"
+
+      # ── Prometheus scrape failures (rule evaluation errors) ──────────────────
+      - alert: PrometheusRuleEvaluationFailure
+        expr: >
+          prometheus_rule_evaluation_failures_total > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Prometheus rule evaluation failures ({{ $value }} failures)"
+          description: >
+            Prometheus encountered {{ $value }} rule evaluation failures. Alert rules
+            may not be firing correctly. Check Prometheus logs for PromQL syntax errors.

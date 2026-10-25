@@ -7,22 +7,8 @@ spring:
 
   cloud:
     gateway:
-      default-filters:
-        - AddRequestHeader=X-Correlation-ID, ${random.uuid}
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "*"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - PATCH
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-
-      # Routes: Maps external inbound paths to internal microservices
+      # Routes are defined here — each entry routes a path prefix to a downstream service.
+      # URIs are overridden in Docker via environment variables.
       routes:
         - id: trade-service
           uri: ${TRADE_SERVICE_URI:http://localhost:8081}
@@ -34,6 +20,7 @@ spring:
                 redis-rate-limiter.replenishRate: 100
                 redis-rate-limiter.burstCapacity: 200
                 key-resolver: "#{@principalNameKeyResolver}"
+            - AddRequestHeader=X-Correlation-ID, ${random.uuid}
 
         - id: position-service
           uri: ${POSITION_SERVICE_URI:http://localhost:8082}
@@ -53,9 +40,7 @@ spring:
         - id: reference-data-service
           uri: ${REFERENCE_DATA_SERVICE_URI:http://localhost:8085}
           predicates:
-            - Path=/instruments/**, /participants/**, /api/v1/instruments/**, /api/v1/participants/**
-          filters:
-            - RewritePath=/api/v1/(?<segment>instruments.*|participants.*), /$\{segment}
+            - Path=/instruments/**, /participants/**, /accounts/**
 
         - id: corporate-action-service
           uri: ${CORPORATE_ACTION_SERVICE_URI:http://localhost:8086}
@@ -67,18 +52,22 @@ spring:
           predicates:
             - Path=/api/v1/notifications/**
 
-  # Redis: distributed token-bucket rate limiting
+  # Redis: used for rate limiting (reactive RedisRateLimiter)
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
-  # OAuth2: validates JWT tokens issued by Keycloak before routing requests
+  # JWT: shared secret key used by AuthController to sign tokens and by the
+  # reactive JwtDecoder bean to verify them on every inbound request.
+  # Override with a strong secret (≥32 chars) via environment variable in production.
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/clearing}
+          # No issuer-uri — we use a symmetric HS256 key; decoder is configured in SecurityConfig.
+          secret: ${JWT_SECRET:clearing-platform-jwt-secret-key-that-is-long-enough-for-hs256}
+
 
 management:
   endpoints:
@@ -94,8 +83,6 @@ management:
         enabled: true
 
 logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} [correlationId=%X{correlationId}] - %msg%n"
   level:
     com.clearing: INFO
     org.springframework.cloud.gateway: INFO

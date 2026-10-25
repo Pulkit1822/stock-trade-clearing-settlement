@@ -6,7 +6,7 @@ spring:
     name: trade-service
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:clearing}
+    url: jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:5432}/${DB_NAME:clearing}
     username: ${DB_USERNAME:admin}
     password: ${DB_PASSWORD:admin}
     driver-class-name: org.postgresql.Driver
@@ -46,12 +46,24 @@ spring:
         acks: all
         retries: 3
         max.in.flight.requests.per.connection: 1
+    consumer:
+      group-id: trade-service-settlement
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual_immediate
+      properties:
+        # Whitelist shared event classes for Jackson deserialization
+        spring.json.trusted.packages: "com.clearing.shared.events"
+        max.poll.records: 100
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/clearing}
+          secret: ${JWT_SECRET:clearing-platform-jwt-secret-key-that-is-long-enough-for-hs256}
 
 management:
   endpoints:

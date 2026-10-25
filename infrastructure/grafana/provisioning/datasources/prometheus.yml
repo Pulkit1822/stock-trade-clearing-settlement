@@ -4,3 +4,24 @@ datasources:
     type: prometheus
     url: http://prometheus:9090
     isDefault: true
+    editable: false
+
+  - name: Elasticsearch
+    type: elasticsearch
+    url: http://elasticsearch:9200
+    access: proxy
+    editable: false
+    jsonData:
+      index: "clearing-logs-*"
+      timeField: "@timestamp"
+      esVersion: "8.10.2"
+      logMessageField: "log"
+      logLevelField:   "level"
+
+  - name: Alertmanager
+    type: alertmanager
+    url: http://alertmanager:9093
+    access: proxy
+    editable: false
+    jsonData:
+      implementation: prometheus

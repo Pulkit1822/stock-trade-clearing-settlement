@@ -23,4 +23,9 @@ public interface PositionRepository extends JpaRepository<Position, UUID> {
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Position> findByAccountIdAndInstrumentId(String accountId, String instrumentId);
+
+    /**
+     * Looks up all positions for a given instrument (used for bulk Corporate Action processing).
+     */
+    org.springframework.data.domain.Page<Position> findByInstrumentId(String instrumentId, org.springframework.data.domain.Pageable pageable);
 }

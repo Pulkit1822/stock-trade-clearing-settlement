@@ -1,0 +1,5 @@
+# Local development profile
+spring:
+  # Local overrides for market-integration-gateway
+  application:
+    name: market-integration-gateway-local

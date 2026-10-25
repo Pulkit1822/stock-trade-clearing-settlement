@@ -1,6 +1,7 @@
 {
   "realm": "clearing",
   "enabled": true,
+  "sslRequired": "none",
   "roles": {
     "realm": [
       {"name": "participant"},
@@ -10,7 +11,7 @@
   },
   "clients": [
     {
-      "clientId": "clearing-api",
+      "clientId": "clearing-gateway",
       "enabled": true,
       "publicClient": true,
       "directAccessGrantsEnabled": true,

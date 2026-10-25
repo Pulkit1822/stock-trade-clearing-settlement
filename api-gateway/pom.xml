@@ -27,7 +27,7 @@
             <artifactId>spring-cloud-starter-gateway</artifactId>
         </dependency>
 
-        <!-- OAuth2 Resource Server: validates JWT tokens from Keycloak (reactive) -->
+        <!-- OAuth2 Resource Server: validates our own HS256 JWT tokens (reactive) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
@@ -60,11 +60,30 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Test: WebFlux WebTestClient for reactive endpoint assertions -->
+        <!-- WebFlux: Required by spring-boot-starter-oauth2-client for Reactive Configs -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
-            <scope>test</scope>
+        </dependency>
+
+
+        <!-- JJWT for creating and signing HS256 JSON Web Tokens in AuthController -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.5</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.5</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.5</version>
+            <scope>runtime</scope>
         </dependency>
 
     </dependencies>

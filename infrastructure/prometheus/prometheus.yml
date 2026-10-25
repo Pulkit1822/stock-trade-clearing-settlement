@@ -1,44 +1,82 @@
 global:
-  scrape_interval: 15s
+  scrape_interval:     15s
   evaluation_interval: 15s
 
+# ── Alertmanager: where Prometheus sends firing alerts ───────────────────────
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# ── Rule files: load all alert rule definitions ──────────────────────────────
+rule_files:
+  - "alerts/service-health.yml"
+  - "alerts/kafka.yml"
+  - "alerts/jvm.yml"
+
 scrape_configs:
+
+  # ── API Gateway ────────────────────────────────────────────────────────────
   - job_name: 'api-gateway'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['host.docker.internal:8080']
+        labels:
+          service: 'api-gateway'
 
+  # ── Trade Service ──────────────────────────────────────────────────────────
   - job_name: 'trade-service'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['host.docker.internal:8081']
+        labels:
+          service: 'trade-service'
 
+  # ── Position Service ───────────────────────────────────────────────────────
   - job_name: 'position-service'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['host.docker.internal:8082']
+        labels:
+          service: 'position-service'
 
+  # ── Clearing Service ───────────────────────────────────────────────────────
   - job_name: 'clearing-service'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['host.docker.internal:8083']
+        labels:
+          service: 'clearing-service'
 
+  # ── Notification Service ───────────────────────────────────────────────────
   - job_name: 'notification-service'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['host.docker.internal:8084']
+        labels:
+          service: 'notification-service'
 
+  # ── Reference Data Service ─────────────────────────────────────────────────
   - job_name: 'reference-data-service'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['host.docker.internal:8085']
+        labels:
+          service: 'reference-data-service'
 
+  # ── Corporate Action Service ───────────────────────────────────────────────
   - job_name: 'corporate-action-service'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['host.docker.internal:8086']
+        labels:
+          service: 'corporate-action-service'
 
+  # ── Market Integration Gateway ─────────────────────────────────────────────
   - job_name: 'market-integration-gateway'
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ['host.docker.internal:8088']
+        labels:
+          service: 'market-integration-gateway'

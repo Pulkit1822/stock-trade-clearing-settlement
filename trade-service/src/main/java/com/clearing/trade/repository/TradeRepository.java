@@ -11,5 +11,10 @@ import java.util.UUID;
  */
 @Repository
 public interface TradeRepository extends JpaRepository<Trade, UUID> {
-    // Add custom finder methods later if required (e.g. findByBuyerAccount)
+
+    /**
+     * Finds all trades by their current status.
+     * Used by query endpoints to list SUBMITTED, SETTLED, etc.
+     */
+    java.util.List<Trade> findByStatus(com.clearing.trade.model.TradeStatus status);
 }

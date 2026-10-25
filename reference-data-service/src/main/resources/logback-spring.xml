@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  logback-spring.xml — Shared structured logging configuration.
+
+  Profile "docker":
+    JSON encoder (via logstash-logback-encoder) → stdout
+    Docker's fluentd log driver picks up stdout and forwards to Elasticsearch.
+    Each log line is a single-line JSON object with fields:
+      @timestamp, level, logger_name, message, service_name, tradeId, correlationId
+
+  Profile "default" (local development):
+    Human-readable console output with ANSI colors for easy reading in IDE.
+
+  Spring Boot picks this file up automatically because it's named logback-spring.xml
+  and is on the classpath.
+-->
+<configuration>
+
+    <!-- ── Local development: readable console output ──────────────────────── -->
+    <springProfile name="default,local">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) [tradeId=%X{tradeId}] [correlationId=%X{correlationId}] - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+
+        <logger name="com.clearing" level="INFO"/>
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
+    </springProfile>
+
+    <!-- ── Docker / production: structured JSON output for Fluentd ─────────── -->
+    <springProfile name="docker,prod">
+        <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!--
+                  Custom fields added to every log record.
+                  service_name is picked from spring.application.name via
+                  the Spring Boot environment — set in each service's application.yml.
+                -->
+                <customFields>{"service_name":"${spring.application.name:-unknown}"}</customFields>
+
+                <!-- Include MDC fields (tradeId, correlationId, accountId) as top-level JSON fields -->
+                <includeMdc>true</includeMdc>
+
+                <!-- Omit the caller data (class+line) for performance -->
+                <includeCallerData>false</includeCallerData>
+
+                <!-- Short logger name to reduce JSON size -->
+                <shortenedLoggerNameLength>36</shortenedLoggerNameLength>
+
+                <!-- Timestamp format that Elasticsearch/Kibana prefers -->
+                <timestampPattern>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</timestampPattern>
+                <timeZone>UTC</timeZone>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="JSON_CONSOLE"/>
+        </root>
+
+        <logger name="com.clearing" level="INFO"/>
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="org.apache.kafka" level="WARN"/>
+    </springProfile>
+
+</configuration>

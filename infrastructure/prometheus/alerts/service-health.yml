@@ -1,0 +1,98 @@
+groups:
+
+  - name: clearing.service.health
+    # ── Re-evaluation interval ──────────────────────────────────────────────
+    # 15s matches the Prometheus scrape_interval so alerts fire within one cycle.
+    interval: 15s
+    rules:
+
+      # ── Service Down ────────────────────────────────────────────────────────
+      - alert: ServiceDown
+        expr: up == 0
+        # for: 0m means alert immediately on the first failed scrape.
+        # A downed service in a clearing platform is never acceptable.
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Service {{ $labels.job }} is DOWN"
+          description: >
+            Prometheus cannot reach {{ $labels.job }} at {{ $labels.instance }}.
+            The scrape has been failing for at least one evaluation cycle.
+            Immediate investigation required — this service may be crashing or OOM-killed.
+          runbook: "https://wiki.internal/runbooks/service-down"
+
+      # ── High HTTP 5xx Error Rate ────────────────────────────────────────────
+      - alert: HighHttpErrorRate
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count[5m])) by (job)
+          > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.job }} ({{ $value | humanizePercentage }})"
+          description: >
+            Service {{ $labels.job }} is returning 5xx responses for more than 1% of requests
+            over the past 5 minutes. Current rate: {{ $value | humanizePercentage }}.
+            SLO breach likely if not resolved within the error budget window.
+          runbook: "https://wiki.internal/runbooks/high-error-rate"
+
+      # ── p99 Latency SLO Breach ──────────────────────────────────────────────
+      - alert: P99LatencyBreached
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(http_server_requests_seconds_bucket[5m])) by (le, job)
+          ) * 1000 > 500
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "p99 latency > 500ms on {{ $labels.job }} ({{ $value | humanize }}ms)"
+          description: >
+            Service {{ $labels.job }} p99 HTTP response latency has exceeded 500ms
+            for the past 5 minutes. Current p99: {{ $value | humanize }}ms.
+            SLO target is < 200ms. Investigate DB query latency, connection pool, or Kafka publish time.
+          runbook: "https://wiki.internal/runbooks/high-latency"
+
+      # ── Trade Submission Latency — tighter SLO for the critical path ────────
+      - alert: TradeSubmissionLatencyBreached
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(http_server_requests_seconds_bucket{job="trade-service", uri="/api/v1/trades", method="POST"}[5m])) by (le)
+          ) * 1000 > 200
+        for: 5m
+        labels:
+          severity: warning
+          team: trades
+        annotations:
+          summary: "Trade submission p99 exceeded 200ms ({{ $value | humanize }}ms)"
+          description: >
+            Trade submission (POST /api/v1/trades) p99 latency is {{ $value | humanize }}ms.
+            SLO target is < 200ms. Root causes: DB write contention, Kafka broker lag, or GC pause.
+          runbook: "https://wiki.internal/runbooks/trade-latency"
+
+      # ── Trade Submission Success Rate SLO ───────────────────────────────────
+      - alert: TradeSuccessRateBelowSLO
+        expr: >
+          100 *
+          sum(rate(http_server_requests_seconds_count{job="trade-service", uri="/api/v1/trades", status="201"}[5m]))
+          /
+          sum(rate(http_server_requests_seconds_count{job="trade-service", uri="/api/v1/trades"}[5m]))
+          < 99.9
+        for: 5m
+        labels:
+          severity: critical
+          team: trades
+        annotations:
+          summary: "Trade success rate below 99.9% SLO (current: {{ $value | humanize }}%)"
+          description: >
+            The trade submission success rate has dropped below the 99.9% SLO target.
+            Current rate: {{ $value | humanize }}%. Check for validation failures, downstream service outages,
+            or Kafka broker connectivity issues.
+          runbook: "https://wiki.internal/runbooks/trade-slo"

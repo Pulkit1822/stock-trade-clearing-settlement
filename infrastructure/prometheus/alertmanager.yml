@@ -1,0 +1,127 @@
+# infrastructure/prometheus/alertmanager.yml
+#
+# Alertmanager routing configuration for the PostTrade Clearing Platform.
+#
+# Routing strategy:
+#   critical  → immediate notification, no grouping wait, repeated every 1h
+#   warning   → grouped for 5m before sending, repeated every 4h
+#   trades    → separate channel so trade SLO breaches are never buried in infra noise
+#
+# Inhibition:
+#   If a service is DOWN, suppress all other alerts for that service.
+#   This prevents alert flood from a single root cause (e.g. 100 "high latency" alerts
+#   while the service is already DOWN).
+#
+# To activate a real notification channel:
+#   - Slack: uncomment slack_configs and set SLACK_WEBHOOK_URL env variable
+#   - PagerDuty: add pagerduty_configs with integration key
+#   - Email: add email_configs with SMTP settings
+
+global:
+  # Default timeout before Alertmanager sends a resolve notification
+  resolve_timeout: 5m
+
+  # Slack webhook URL (set via environment variable in docker-compose)
+  # slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+# ── Templates ────────────────────────────────────────────────────────────────
+# Custom message templates for richer Slack/PagerDuty notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# ── Routing Tree ─────────────────────────────────────────────────────────────
+route:
+  # All alerts match the root route first, then sub-routes are checked.
+  receiver: 'platform-team-log'  # Default: log-only (safe default for local dev)
+  group_by: ['alertname', 'job']
+  group_wait:      30s  # How long to wait before sending the first group notification
+  group_interval:  5m   # How long to wait before sending updated group notification
+  repeat_interval: 4h   # How often to re-send if alert keeps firing
+
+  routes:
+
+    # ── Critical: immediate, no wait, loud ────────────────────────────────────
+    - match:
+        severity: critical
+      receiver: 'platform-critical'
+      group_wait: 0s          # Fire immediately
+      repeat_interval: 1h     # Re-alert every hour while firing
+      continue: false
+
+    # ── Trade-specific critical: separate channel ─────────────────────────────
+    - match_re:
+        alertname: 'Trade.*|Settlement.*'
+        severity: critical
+      receiver: 'trades-critical'
+      group_wait: 0s
+      repeat_interval: 30m    # Trades critical: re-alert every 30 minutes
+      continue: false
+
+    # ── Warning: grouped, not urgent ─────────────────────────────────────────
+    - match:
+        severity: warning
+      receiver: 'platform-warning'
+      group_wait: 5m
+      repeat_interval: 4h
+      continue: false
+
+# ── Receivers ────────────────────────────────────────────────────────────────
+receivers:
+
+  # Log-only receiver — used as the safe default and for local development.
+  # "webhook" pointing to a simple echo server confirms alert routing works
+  # without sending real notifications.
+  - name: 'platform-team-log'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'  # Replace with real endpoint
+        send_resolved: true
+
+  # Critical alerts — replace with your Slack webhook or PagerDuty key
+  - name: 'platform-critical'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'
+        send_resolved: true
+    # ── Uncomment to enable Slack ────────────────────────────────────────────
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#clearing-platform-alerts'
+    #     title: ':red_circle: CRITICAL — {{ .CommonLabels.alertname }}'
+    #     text: >-
+    #       *Alert:* {{ .CommonLabels.alertname }}
+    #       *Service:* {{ .CommonLabels.job }}
+    #       *Severity:* {{ .CommonLabels.severity }}
+    #       *Summary:* {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+    #       *Description:* {{ range .Alerts }}{{ .Annotations.description }}{{ end }}
+    #       *Runbook:* {{ range .Alerts }}{{ .Annotations.runbook }}{{ end }}
+    #     send_resolved: true
+
+  # Trade-specific critical alerts
+  - name: 'trades-critical'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'
+        send_resolved: true
+    # slack_configs:
+    #   - api_url: '${SLACK_WEBHOOK_URL}'
+    #     channel: '#clearing-trades-oncall'
+    #     title: ':rotating_light: TRADE SLO BREACH — {{ .CommonLabels.alertname }}'
+    #     send_resolved: true
+
+  # Warning alerts — lower urgency channel
+  - name: 'platform-warning'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'
+        send_resolved: true
+
+# ── Inhibition Rules ─────────────────────────────────────────────────────────
+# If a service is DOWN, suppress all other alerts for that same service.
+# This prevents "high latency" + "high error rate" + "heap pressure" false alarms
+# when the real root cause is simply that the service crashed.
+inhibit_rules:
+  - source_match:
+      alertname: 'ServiceDown'
+      severity: 'critical'
+    target_match_re:
+      # Suppress any non-ServiceDown alert for the same job
+      alertname: '.+'
+    equal: ['job']
+    # Only inhibit if the down service matches the same job as the firing alert

@@ -1,0 +1,128 @@
+groups:
+
+  - name: clearing.kafka
+    interval: 15s
+    rules:
+
+      # ── Consumer Lag Critical: any group falls behind by 1000+ messages ─────
+      - alert: KafkaConsumerLagCritical
+        expr: >
+          sum(kafka_consumer_fetch_manager_records_lag) by (job, topic) > 1000
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Kafka consumer lag CRITICAL on {{ $labels.job }} / {{ $labels.topic }} ({{ $value }} msgs)"
+          description: >
+            Consumer group in {{ $labels.job }} has {{ $value }} unprocessed messages
+            on topic {{ $labels.topic }}. The consumer is falling behind the producer.
+            Possible causes: consumer thread blocking, DB write contention, or service crash.
+            If lag continues to grow, SLA breach is imminent.
+          runbook: "https://wiki.internal/runbooks/kafka-consumer-lag"
+
+      # ── Consumer Lag Warning: early warning before it becomes critical ───────
+      - alert: KafkaConsumerLagWarning
+        expr: >
+          sum(kafka_consumer_fetch_manager_records_lag) by (job, topic) > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Kafka consumer lag WARNING on {{ $labels.job }} / {{ $labels.topic }} ({{ $value }} msgs)"
+          description: >
+            Consumer group in {{ $labels.job }} has {{ $value }} unprocessed messages
+            on topic {{ $labels.topic }}. Lag has been above 100 for 5 minutes.
+            Investigate before it crosses the critical threshold of 1000.
+          runbook: "https://wiki.internal/runbooks/kafka-consumer-lag"
+
+      # ── Producer Errors: any failed produce attempt is a data loss risk ──────
+      - alert: KafkaProducerErrors
+        expr: >
+          sum(rate(kafka_producer_record_error_total[5m])) by (job) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Kafka producer errors detected on {{ $labels.job }} ({{ $value | humanize }} errors/s)"
+          description: >
+            Service {{ $labels.job }} is experiencing Kafka producer errors at
+            {{ $value | humanize }} errors/second. This means events are NOT being
+            published to Kafka. Data loss is occurring — trades may be silently dropped.
+            Check broker connectivity, idempotent producer config, and network routes.
+          runbook: "https://wiki.internal/runbooks/kafka-producer-error"
+
+      # ── Stuck Consumer: lag is non-zero but NOT changing (consumer is frozen) ─
+      - alert: KafkaConsumerStuck
+        expr: >
+          (
+            sum(kafka_consumer_fetch_manager_records_lag) by (job, topic) > 0
+          ) and (
+            delta(sum(kafka_consumer_fetch_manager_records_lag) by (job, topic)[5m]) == 0
+          )
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Kafka consumer STUCK on {{ $labels.job }} / {{ $labels.topic }}"
+          description: >
+            Consumer group in {{ $labels.job }} has a non-zero lag on topic {{ $labels.topic }}
+            that has NOT decreased in the past 5 minutes. The consumer is stuck —
+            not making progress. Possible causes: poison message in DLQ, thread deadlock,
+            or listener container stopped. Manual intervention required.
+          runbook: "https://wiki.internal/runbooks/kafka-consumer-stuck"
+
+      # ── Re-balance Storm: frequent re-balances cause processing gaps ─────────
+      - alert: KafkaRebalanceStorm
+        expr: >
+          sum(increase(kafka_consumer_coordinator_rebalance_total[5m])) by (job) > 3
+        for: 0m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Kafka consumer re-balance storm on {{ $labels.job }} ({{ $value }} in 5m)"
+          description: >
+            Service {{ $labels.job }} has experienced {{ $value }} consumer group re-balances
+            in the past 5 minutes. Frequent re-balances cause processing pauses and temporary
+            lag spikes. Possible causes: session timeout too low, slow poll(), or pod restarts.
+            Check max.poll.interval.ms and session.timeout.ms.
+          runbook: "https://wiki.internal/runbooks/kafka-rebalance"
+
+      # ── Max Partition Lag: a single stuck partition invisible to averages ──────
+      - alert: KafkaMaxPartitionLagCritical
+        expr: >
+          max(kafka_consumer_fetch_manager_records_lag) by (job, topic) > 500
+        for: 3m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Single partition lag > 500 on {{ $labels.job }} / {{ $labels.topic }}"
+          description: >
+            The highest lag on any single partition for {{ $labels.job }} topic {{ $labels.topic }}
+            is {{ $value }} messages. Average lag may look healthy but this one partition
+            is behind. A stuck partition can delay the entire processing pipeline
+            if partition-aware ordering is required.
+          runbook: "https://wiki.internal/runbooks/kafka-partition-lag"
+
+      # ── Trade Pipeline: settlement-completed topic lag (end-to-end delay) ────
+      - alert: SettlementCompletedLagCritical
+        expr: >
+          sum(kafka_consumer_fetch_manager_records_lag{topic="settlement-completed"}) by (job) > 500
+        for: 2m
+        labels:
+          severity: critical
+          team: trades
+        annotations:
+          summary: "Settlement-completed consumer lag CRITICAL: {{ $labels.job }} ({{ $value }} msgs)"
+          description: >
+            The settlement-completed topic consumer in {{ $labels.job }} has {{ $value }} messages
+            pending. This is the terminal event in the trade pipeline. High lag here means:
+            - Trade statuses are not being updated to SETTLED (trade-service)
+            - Participants are not being notified (notification-service)
+            Immediate investigation required.
+          runbook: "https://wiki.internal/runbooks/settlement-lag"

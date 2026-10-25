@@ -66,6 +66,13 @@ public class NotificationService {
         notificationEventPublisher.publish(new NotificationEvent(accountId, tradeId, message, Instant.now()));
     }
 
+    @Transactional
+    public void handleDividendPayout(com.clearing.shared.events.DividendPayoutEvent event) {
+        notify(event.corporateActionId(), event.accountId(),
+                String.format("Dividend payout of $%s credited for your holdings of %s.",
+                        event.amount().toPlainString(), event.instrumentId()));
+    }
+
     public List<Notification> findByTradeId(String tradeId) {
         return notificationRepository.findByTradeId(tradeId);
     }

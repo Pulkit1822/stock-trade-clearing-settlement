@@ -1,30 +1,24 @@
 #!/bin/bash
 
-# Configuration
-REALM_URL="http://localhost:8180/realms/clearing"
-GATEWAY_URL="http://localhost:8080/api/v1/trades"
-CLIENT_ID="clearing-client"
-CLIENT_SECRET="secret"
-USERNAME="user"
-PASSWORD="password"
+# Configuration — no Keycloak needed.
+# Uses the API Gateway's own /api/auth/login to issue a signed HS256 JWT.
+GATEWAY_URL="http://localhost:8080"
+USERNAME="admin"
+PASSWORD="admin123"
 
 echo "--------------------------------------------------"
-echo "Step 1: Acquiring fresh JWT from Keycloak..."
+echo "Step 1: Acquiring JWT from API Gateway..."
 echo "--------------------------------------------------"
 
-TOKEN_RESPONSE=$(curl -s -X POST "$REALM_URL/protocol/openid-connect/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "client_id=$CLIENT_ID" \
-  -d "client_secret=$CLIENT_SECRET" \
-  -d "username=$USERNAME" \
-  -d "password=$PASSWORD" \
-  -d "grant_type=password")
+TOKEN_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD\"}")
 
-TOKEN=$(echo $TOKEN_RESPONSE | jq -r .access_token)
+TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r .token)
 
 if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then
     echo "ERROR: Failed to acquire token. Full response:"
-    echo $TOKEN_RESPONSE
+    echo "$TOKEN_RESPONSE"
     exit 1
 fi
 
@@ -34,7 +28,7 @@ echo "--------------------------------------------------"
 echo "Step 2: Submitting Standardized Trade Request..."
 echo "--------------------------------------------------"
 
-RESPONSE=$(curl -s -i -X POST "$GATEWAY_URL" \
+RESPONSE=$(curl -s -i -X POST "$GATEWAY_URL/api/v1/trades" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

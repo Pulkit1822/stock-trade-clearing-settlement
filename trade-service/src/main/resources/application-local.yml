@@ -1,9 +1,8 @@
-# Local development profile — connects to Docker Postgres (port 5433) and disables Keycloak auth for fast local iteration
+# Local development profile
+# Re-enabled security auto-configuration to support custom JWT (HS256) flow.
 spring:
+  # Profile-specific settings
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:clearing}
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
-      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
-      - org.springframework.boot.actuate.autoconfigure.security.servlet.ManagementWebSecurityAutoConfiguration
+    # Local overrides if any
+    hikari:
+      maximum-pool-size: 5

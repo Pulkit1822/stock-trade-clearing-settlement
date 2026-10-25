@@ -6,7 +6,7 @@ spring:
     name: clearing-service
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:clearing}
+    url: jdbc:postgresql://${DB_HOST:127.0.0.1}:${DB_PORT:5432}/${DB_NAME:clearing}
     username: ${DB_USERNAME:admin}
     password: ${DB_PASSWORD:admin}
     driver-class-name: org.postgresql.Driver
@@ -61,7 +61,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/clearing}
+          secret: ${JWT_SECRET:clearing-platform-jwt-secret-key-that-is-long-enough-for-hs256}
 
 management:
   endpoints:

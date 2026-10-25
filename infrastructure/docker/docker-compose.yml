@@ -1,6 +1,51 @@
 version: '3.8'
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared logging configuration.
+# Every service below uses the fluentd log driver so all stdout/stderr is
+# collected by Fluentd and forwarded to Elasticsearch.
+#
+# Usage: reference this block with &default-logging in each service, then
+# apply it with <<: *default-logging
+# ─────────────────────────────────────────────────────────────────────────────
+x-logging: &default-logging
+  driver: fluentd
+  options:
+    fluentd-address: localhost:24224
+    fluentd-async: "true"
+    tag: "clearing.{{.Name}}"
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+
+  # ── Fluentd: centralized log collector ───────────────────────────────────
+  fluentd:
+    build:
+      context: ../fluentd
+      dockerfile: Dockerfile
+    container_name: fluentd
+    ports:
+      - "24224:24224"      # Docker log driver sends here
+      - "24224:24224/udp"
+    volumes:
+      - ../fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
+      - fluentd-buffer:/fluentd/log/buffer
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+    # Fluentd itself cannot use the fluentd log driver (circular dependency)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: clearing-db
@@ -15,13 +60,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging: *json-logging
 
+  # ── Zookeeper ─────────────────────────────────────────────────────────────
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+    logging: *json-logging
 
+  # ── Kafka broker ──────────────────────────────────────────────────────────
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
@@ -36,7 +85,9 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    logging: *json-logging
 
+  # ── Kafka UI ──────────────────────────────────────────────────────────────
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -45,33 +96,56 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    logging: *json-logging
 
+  # ── Redis: cache for reference-data-service + rate limiter for api-gateway ─
   redis:
     image: redis:7.2-alpine
     container_name: redis
     ports:
       - "6379:6379"
+    logging: *json-logging
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:22.0.5
-    container_name: keycloak
-    command: start-dev --import-realm
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-    ports:
-      - "8180:8080"
-    volumes:
-      - ../keycloak/realm-export.json:/opt/keycloak/data/import/realm.json:ro
 
+
+  # ── Prometheus: metrics scraper + alert rule evaluator ───────────────────
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
     volumes:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../prometheus/alerts:/etc/prometheus/alerts:ro
     ports:
       - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'   # Enables POST /-/reload for hot-reloading rules
+    logging: *json-logging
 
+  # ── Alertmanager: alert routing, grouping and delivery ───────────────────
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    volumes:
+      - ../prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"   # Alertmanager UI: http://localhost:9093
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    restart: unless-stopped
+    # Alertmanager itself cannot use fluentd log driver (same bootstrap issue as ES)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Grafana: dashboards (Prometheus + Elasticsearch datasources) ──────────
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -81,7 +155,10 @@ services:
       - ../grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
+      - elasticsearch
+    logging: *json-logging
 
+  # ── Elasticsearch: log storage (written by Fluentd) ──────────────────────
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
     container_name: elasticsearch
@@ -92,7 +169,19 @@ services:
     ports:
       - "9200:9200"
       - "9300:9300"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    # Elasticsearch cannot use fluentd driver (it starts before Fluentd is healthy)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ── Kibana: log visualization UI ─────────────────────────────────────────
   kibana:
     image: docker.elastic.co/kibana/kibana:8.10.2
     container_name: kibana
@@ -102,7 +191,9 @@ services:
       - "5601:5601"
     depends_on:
       - elasticsearch
+    logging: *json-logging
 
+  # ── Kafka topic initializer (one-shot) ───────────────────────────────────
   kafka-init:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka-init
@@ -111,6 +202,14 @@ services:
     volumes:
       - ../kafka/create-topics.sh:/scripts/create-topics.sh
     command: >
-      bash -c "echo 'Waiting for Kafka to be ready...' && \
-               sleep 10 && \
+      bash -c "echo 'Waiting for Kafka to be ready...' &&
+               sleep 10 &&
                sh /scripts/create-topics.sh"
+    # One-shot container — no persistent logging needed
+    logging:
+      driver: json-file
+
+volumes:
+  # Named volume for Fluentd's file-backed buffer.
+  # Persists across container restarts so in-flight log records survive a Fluentd crash.
+  fluentd-buffer:
